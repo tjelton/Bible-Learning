@@ -254,6 +254,21 @@ p { margin: 0; }
 .run { margin-left: 10px; color: var(--muted); font-size: var(--step-0); }
 .run b { color: var(--ink); }
 .score { font: 600 var(--step-2)/1 var(--font-ui); min-width: 3ch; text-align: right; }
+/* Training: the chapters being learned, filling like map tiles. */
+.train-set { display: flex; gap: 6px; min-width: 0; overflow: hidden; }
+.chip {
+  position: relative;
+  overflow: hidden;
+  flex: none;
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 4px 9px 3px;
+  font: 400 var(--step-1)/1.1 var(--font-display);
+  white-space: nowrap;
+}
+.chip .fill { position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--p, 0) * 100%); background: var(--gold-soft); transition: height 0.4s ease; }
+.chip .l { position: relative; }
 
 .card {
   flex: 1 1 auto;
@@ -278,6 +293,7 @@ p { margin: 0; }
   color: var(--gold);
 }
 .event-title { font: 400 var(--step-4)/1.05 var(--font-display); }
+.chapter-ask { font: 400 var(--step-5)/1 var(--font-display); }
 .clue { font: 400 var(--step-1)/1.6 var(--font-read); max-width: 62ch; }
 .verse {
   position: relative;
@@ -319,6 +335,15 @@ p { margin: 0; }
 .choice.is-wrong { background: var(--bad-soft); border-color: var(--bad); }
 .choice.is-wrong .num, .choice.is-wrong .book { color: var(--bad); }
 .choice.is-faded { opacity: 0.45; }
+.choices.is-three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+/* "What happens in this chapter?" answers are events, one per row. */
+.choices.is-events { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.choice.choice-event { min-height: 54px; flex-direction: row; justify-content: flex-start; text-align: left; padding: 10px 16px; }
+.choice-event .title { font: 500 var(--step-1)/1.3 var(--font-read); }
+.choice-event .key { top: 50%; transform: translateY(-50%); }
+@media (hover: hover) { .choice.choice-event { padding-left: 30px; } }
+.choice.is-right .title { color: var(--good); }
+.choice.is-wrong .title { color: var(--bad); }
 .choice.pop { animation: pop 0.35s ease; }
 .choice.shake { animation: shake 0.4s ease; }
 @keyframes pop { 40% { transform: scale(1.06); } }
@@ -344,6 +369,24 @@ p { margin: 0; }
 .verdict { font: 600 var(--step-1)/1.2 var(--font-ui); }
 .verdict.ok { color: var(--good); }
 .verdict.miss { color: var(--bad); }
+.learned { background: var(--gold-soft); border-radius: 12px; padding: 10px 14px; font-weight: 600; }
+.intro-lede { font: 400 var(--step-0)/1.6 var(--font-read); color: var(--muted); }
+.intro-ch { display: grid; gap: 4px; }
+.intro-ch + .intro-ch { padding-top: 14px; border-top: 1px solid var(--line); }
+.intro-ch .ref { font-size: var(--step-3); }
+.intro-evs { list-style: none; margin: 4px 0 0; padding: 0; display: grid; }
+.intro-ev {
+  width: 100%;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: baseline;
+  min-height: 44px;
+  padding: 10px 0;
+  border: 0; border-bottom: 1px solid var(--line);
+  background: none;
+  text-align: left;
+}
+.intro-evs li:last-child .intro-ev { border-bottom: 0; }
+.intro-ev .t { font: 500 var(--step-1)/1.3 var(--font-read); }
+.intro-ev .r { color: var(--muted); font-size: var(--step--1); white-space: nowrap; }
 .ref { font: 400 var(--step-4)/1 var(--font-display); }
 .ref-title { font: 500 var(--step-1)/1.3 var(--font-read); }
 .meta { color: var(--muted); font-size: var(--step-0); line-height: 1.45; }
@@ -466,6 +509,7 @@ p { margin: 0; }
 
 @media (min-height: 760px) {
   .choice { min-height: 88px; }
+  .choice.choice-event { min-height: 60px; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }

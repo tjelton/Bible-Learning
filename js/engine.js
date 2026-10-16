@@ -197,6 +197,149 @@
     return shuffle(wrong, rng).slice(0, 2).sort((a, b) => a - b);
   }
 
+  // ── Training ──
+  // Training teaches a few chapters at a time. It starts with TRAINING_ACTIVE
+  // chapters and brings in the next one whenever a chapter is learned (every
+  // event in it mastered), so that many are always being learned. Learned
+  // chapters stay in the mix for review, less often.
+  const TRAINING_ACTIVE = 3;
+  const parseKey = (k) => { const i = k.lastIndexOf(" "); return { book: k.slice(0, i), ch: Number(k.slice(i + 1)) }; };
+
+  function chapterLearned(gospels, k, stats) {
+    const { book, ch } = parseKey(k);
+    const evs = gospels[book] ? gospels[book].events.filter((e) => e.ch === ch) : [];
+    return evs.length > 0 && evs.every((e) => isMastered(stats[e.id]));
+  }
+
+  // Chapters in training from the enabled books, split into those being
+  // learned and those already learned.
+  function trainingStatus(gospels, books, introduced, stats) {
+    const on = introduced.filter((k) => books.includes(parseKey(k).book) && gospels[parseKey(k).book]);
+    const learned = on.filter((k) => chapterLearned(gospels, k, stats));
+    const total = BOOK_ORDER.reduce((n, b) => n + (books.includes(b) && gospels[b] ? gospels[b].chapters : 0), 0);
+    return { learning: on.filter((k) => !learned.includes(k)), learned, total };
+  }
+
+  // The next chapter to bring in: the first one not yet in training, from the
+  // enabled Gospel that is least far through, so several Gospels move together.
+  function nextTrainingChapter(gospels, books, introduced) {
+    const have = new Set(introduced);
+    let best = null;
+    for (const b of BOOK_ORDER) {
+      if (!books.includes(b) || !gospels[b]) continue;
+      const n = gospels[b].chapters;
+      let done = 0, next = null;
+      for (let c = 1; c <= n; c++) {
+        if (have.has(key(b, c))) done++;
+        else if (next === null) next = c;
+      }
+      if (next !== null && (!best || done / n < best.share)) best = { share: done / n, k: key(b, next) };
+    }
+    return best ? best.k : null;
+  }
+
+  // Brings in chapters until TRAINING_ACTIVE are being learned. Returns the
+  // new list and the chapters added (including any already learned elsewhere).
+  function trainingTopUp(gospels, books, introduced, stats) {
+    const list = introduced.slice();
+    const added = [];
+    let next;
+    while (trainingStatus(gospels, books, list, stats).learning.length < TRAINING_ACTIVE &&
+           (next = nextTrainingChapter(gospels, books, list))) {
+      list.push(next);
+      added.push(next);
+    }
+    return { introduced: list, added };
+  }
+
+  // One event from the chapters in training. Chapters still being learned
+  // come up four times as often as learned ones; recent events are skipped.
+  function pickTrainingEvent(gospels, books, introduced, stats, rng, avoid) {
+    const st = trainingStatus(gospels, books, introduced, stats);
+    const learning = new Set(st.learning);
+    const inTraining = new Set(st.learning.concat(st.learned));
+    const pool = eventPool(gospels, books).filter((e) => inTraining.has(key(e.book, e.ch)));
+    if (!pool.length) return null;
+    const avoidSet = new Set(avoid || []);
+    const fresh = pool.filter((e) => !avoidSet.has(e.id));
+    const from = fresh.length ? fresh : pool;
+    const weights = from.map((e) => weightFor(stats[e.id]) * (learning.has(key(e.book, e.ch)) ? 1 : 0.25));
+    let r = rng() * weights.reduce((a, b) => a + b, 0);
+    for (let i = 0; i < from.length; i++) {
+      r -= weights[i];
+      if (r < 0) return from[i];
+    }
+    return from[from.length - 1];
+  }
+
+  // Question style: "chapter" (given the chapter, pick what happens there),
+  // "event" (given what happens, pick the chapter) or "verse" (given a verse,
+  // pick the chapter). Verses join once an event has been answered right.
+  function trainingKind(stat, rng) {
+    const r = rng();
+    if (!stat || !stat.box) return r < 0.5 ? "chapter" : "event";
+    return r < 0.35 ? "chapter" : r < 0.7 ? "event" : "verse";
+  }
+
+  // Chapter choices for an event, drawn only from chapters in training. Wrong
+  // answers come from the right Gospel where it has enough (closer chapters
+  // first); otherwise the books are balanced as in buildChoices so the mix
+  // doesn't point at the answer. Up to 4 choices, sorted in Bible order.
+  function trainingChapterChoices(event, gospels, books, introduced, rng) {
+    const banned = new Set([key(event.book, event.ch)].concat(event.par || []));
+    const open = introduced
+      .map(parseKey)
+      .filter((o) => books.includes(o.book) && gospels[o.book] && !banned.has(key(o.book, o.ch)));
+    const byBook = (b) => shuffle(open.filter((o) => o.book === b), rng);
+    const same = byBook(event.book).sort((a, b) => (Math.abs(a.ch - event.ch) <= 3 ? 0 : 1) - (Math.abs(b.ch - event.ch) <= 3 ? 0 : 1));
+    const others = shuffle(BOOK_ORDER.filter((b) => b !== event.book), rng).map(byBook).filter((l) => l.length);
+    let wrong;
+    if (same.length >= 3) wrong = same.slice(0, 3);
+    else if (same.length >= 1 && others.some((l) => l.length >= 2)) wrong = [same[0]].concat(others.find((l) => l.length >= 2).slice(0, 2));
+    else if (others.length >= 3) wrong = others.slice(0, 3).map((l) => l[0]);
+    else wrong = shuffle(open, rng).slice(0, 3);
+    // Early on, parallels can rule out most of the few chapters in training:
+    // keep at least three choices by adding the answer's neighbours.
+    for (let d = 1; wrong.length < 2 && d < gospels[event.book].chapters; d++) {
+      for (const c of shuffle([event.ch - d, event.ch + d], rng)) {
+        const o = { book: event.book, ch: c };
+        if (wrong.length < 2 && c >= 1 && c <= gospels[event.book].chapters && !banned.has(key(o.book, c)) &&
+            !wrong.some((w) => w.book === o.book && w.ch === c)) wrong.push(o);
+      }
+    }
+    const choices = wrong.concat([{ book: event.book, ch: event.ch }]);
+    choices.sort((a, b) => BOOK_ORDER.indexOf(a.book) - BOOK_ORDER.indexOf(b.book) || a.ch - b.ch);
+    return choices;
+  }
+
+  // Event choices for "what happens in this chapter?": the event plus three
+  // from other chapters, in random order. A wrong answer never shares a title
+  // or a story with anything in the asked chapter, and comes from chapters in
+  // training (different chapters where possible) before any others.
+  function trainingEventChoices(event, gospels, books, introduced, rng) {
+    const asked = key(event.book, event.ch);
+    const inChapter = gospels[event.book].events.filter((e) => e.ch === event.ch).map((e) => Object.assign({ book: event.book }, e));
+    const titles = new Set(inChapter.map((e) => e.title));
+    const valid = (w) => key(w.book, w.ch) !== asked && !titles.has(w.title) &&
+      !(w.par || []).includes(asked) && !inChapter.some((x) => sameStory(x, w));
+    const all = eventPool(gospels, books).filter(valid);
+    const inTraining = new Set(introduced);
+    const wrong = [];
+    const passes = [
+      (w) => inTraining.has(key(w.book, w.ch)) && !wrong.some((o) => o.book === w.book && o.ch === w.ch),
+      (w) => inTraining.has(key(w.book, w.ch)),
+      (w) => w.book === event.book,
+      () => true,
+    ];
+    for (const ok of passes) {
+      for (const w of shuffle(all, rng)) {
+        if (wrong.length >= 3) break;
+        if (ok(w) && !wrong.some((o) => o.title === w.title)) wrong.push(w);
+      }
+    }
+    return shuffle(wrong.concat([Object.assign({ book: event.book }, event)]), rng);
+  }
+
   // ── Scoring ──
   // 100 for a right answer, up to +50 for speed, +10 per answer in a row after
   // the first (max +50). Using the 50/50 halves the total.
@@ -261,6 +404,8 @@
     seededRng, shuffle, formatRef, sectionFor, eventPool,
     recordAnswer, isMastered, weightFor, sameStory, pickEvents,
     buildChoices, fiftyFifty, scoreAnswer, rankFor,
+    TRAINING_ACTIVE, chapterLearned, trainingStatus, nextTrainingChapter, trainingTopUp,
+    pickTrainingEvent, trainingKind, trainingChapterChoices, trainingEventChoices,
     cleanVerse, verseText, passage,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = Engine;

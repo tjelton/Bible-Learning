@@ -24,6 +24,8 @@
   if (!settings.books.length) settings.books = ["Matthew"];
   let stats = store.get("cv.stats", {});
   let bests = Object.assign({ round: 0, lamps: 0, run: 0 }, store.get("cv.bests", {}));
+  // Training: the chapters brought in so far, in the order they were added.
+  let training = Object.assign({ chapters: [] }, store.get("cv.training", {}));
 
   const byId = {};
   for (const e of E.eventPool(GOSPELS, BOOKS)) byId[e.id] = e;
@@ -45,6 +47,7 @@
     back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>',
     arrow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
     book: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 6.5C10 5 7 4.5 4 5v13c3-.5 6 0 8 1.5 2-1.5 5-2 8-1.5V5c-3-.5-6 0-8 1.5zM12 6.5v13"/></svg>',
+    sprout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20v-8M12 12c0-3.5-2.5-6-7-6 0 3.5 2.5 6 7 6zM12 14c0-3.5 2.5-6 7-6 0 3.5-2.5 6-7 6z"/></svg>',
     lamp: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5c.6 2.6 3.4 4.6 3.4 7.7a3.4 3.4 0 0 1-6.8 0c0-1.7.9-2.8 1.5-4 .6 1 .8 1.8.8 2.6 1-.9 1.4-3.6 1.1-6.3z"/><path d="M3 15.5h13.5c1.6 0 2.9-.7 3.9-1.8l.9.6c-.6 2.6-2.4 4.7-5.3 5.2H9.4C6 19.5 3.6 17.9 3 15.5z"/></svg>',
   };
 
@@ -62,6 +65,8 @@
     return !!(s && s.mark);
   }
   function saveSettings() { store.set("cv.settings", settings); }
+  const shortRef = (k) => { const i = k.lastIndexOf(" "); return `${BOOK_ABBR[k.slice(0, i)]} ${k.slice(i + 1)}`; };
+  function trainingStatus() { return E.trainingStatus(GOSPELS, settings.books, training.chapters, stats); }
 
   // ── Sound (tiny synthesized tones; starts only after a tap) ──
   let audio = null;
@@ -135,7 +140,7 @@
 
   function startGame(mode) {
     state.game = {
-      mode, // "round" | "lamps"
+      mode, // "round" | "lamps" | "train"
       queue: mode === "round" ? E.pickEvents(pool(), stats, ROUND_LENGTH, Math.random).map((e) => e.id) : [],
       history: [],
       recent: [],
@@ -145,9 +150,25 @@
       lamps: LAMPS,
       q: null,
       newBest: false,
+      intro: [], // training: chapters to introduce before the next question
+      firstIntro: false,
     };
+    if (mode === "train") {
+      state.game.firstIntro = !training.chapters.length;
+      state.game.intro = topUpTraining();
+    }
     state.screen = "play";
     nextQuestion();
+  }
+
+  // Brings new chapters into training. Returns the ones to introduce (chapters
+  // already learned in other modes join without an introduction).
+  function topUpTraining() {
+    const r = E.trainingTopUp(GOSPELS, settings.books, training.chapters, stats);
+    if (!r.added.length) return [];
+    training = { chapters: r.introduced };
+    store.set("cv.training", training);
+    return r.added.filter((k) => !E.chapterLearned(GOSPELS, k, stats));
   }
 
   function nextQuestion() {
@@ -155,6 +176,7 @@
     if ((g.mode === "round" && g.history.length >= ROUND_LENGTH) || (g.mode === "lamps" && g.lamps <= 0)) {
       return finishGame();
     }
+    if (g.mode === "train") return nextTrainingQuestion();
     const id = g.mode === "round" ? g.queue[g.history.length] : E.pickEvents(pool(), stats, 1, Math.random, g.recent)[0].id;
     g.recent = g.recent.concat(id).slice(-60);
     const e = byId[id];
@@ -168,35 +190,79 @@
     render();
   }
 
+  // Training mixes question styles: "chapter" gives the chapter and asks what
+  // happens there; "event" and "verse" ask for the chapter.
+  function nextTrainingQuestion() {
+    const g = state.game;
+    g.q = null;
+    if (g.intro.length) return render(); // show the new chapters first
+    const pick = E.pickTrainingEvent(GOSPELS, settings.books, training.chapters, stats, Math.random, g.recent.slice(-3));
+    if (!pick) { state.game = null; state.screen = "home"; return render(); }
+    const e = byId[pick.id];
+    g.recent = g.recent.concat(e.id).slice(-60);
+    const type = E.trainingKind(stats[e.id], Math.random);
+    g.q = {
+      id: e.id, type,
+      choices: type === "chapter"
+        ? E.trainingEventChoices(e, GOSPELS, settings.books, training.chapters, Math.random)
+        : E.trainingChapterChoices(e, GOSPELS, settings.books, training.chapters, Math.random),
+      removed: [], picked: null, hinted: false, points: null,
+      startedAt: Date.now(),
+    };
+    render();
+  }
+
+  function beginTraining() {
+    const g = state.game;
+    if (!g || g.mode !== "train" || g.q) return;
+    g.intro = [];
+    g.firstIntro = false;
+    nextQuestion();
+  }
+
+  // Whether a choice is the right answer: a chapter, or (for "chapter"
+  // questions) the event itself.
+  function isRight(q, c) { return q.type === "chapter" ? c.id === q.id : same(c, byId[q.id]); }
+
   function timed() { return settings.timer && state.game && state.game.mode === "round"; }
 
+  // index -1 means "show me" in training: the answer is revealed and counts as a miss.
   function answer(index) {
     const g = state.game;
     const q = g.q;
-    if (!q || q.picked !== null || q.removed.includes(index)) return;
+    if (!q || q.picked !== null || q.removed.includes(index) || index >= q.choices.length) return;
     const e = byId[q.id];
-    const choice = q.choices[index];
-    const ok = same(choice, e);
+    const choice = index >= 0 ? q.choices[index] : null;
+    const ok = !!choice && isRight(q, choice);
+    const chapter = `${e.book} ${e.ch}`;
+    const wasLearned = E.chapterLearned(GOSPELS, chapter, stats);
     q.picked = index;
     g.streak = ok ? g.streak + 1 : 0;
     g.bestRun = Math.max(g.bestRun, g.streak);
     if (g.mode === "round") {
       q.points = E.scoreAnswer({ correct: ok, ms: Date.now() - q.startedAt, streak: g.streak, hinted: q.hinted, timed: timed() });
       g.score += q.points.total;
+    } else if (g.mode === "train") {
+      if (ok) g.score += 1;
     } else {
       if (ok) g.score += 1; else g.lamps -= 1;
     }
     g.history.push({ id: q.id, ok, picked: choice, type: q.type });
     stats = E.recordAnswer(stats, q.id, ok);
     store.set("cv.stats", stats);
-    play(ok ? "right" : "wrong");
+    if (g.mode === "train") {
+      q.learned = !wasLearned && E.chapterLearned(GOSPELS, chapter, stats) ? chapter : null;
+      g.intro = g.intro.concat(topUpTraining());
+    }
+    play(q.learned ? "done" : ok ? "right" : "wrong");
     render({ animate: ok ? "pop" : "shake", index });
     if (ok && g.mode === "round") floatPoints(q.points.total);
+    if (q.learned) confetti();
   }
 
   function useHint() {
     const q = state.game && state.game.q;
-    if (!q || q.hinted || q.picked !== null) return;
+    if (!q || q.hinted || q.picked !== null || state.game.mode === "train") return;
     q.hinted = true;
     q.removed = E.fiftyFifty(q.choices, byId[q.id], Math.random);
     render();
@@ -235,7 +301,7 @@
       const btn = app.querySelector(`.choice[data-index="${opts.index}"]`);
       if (btn) btn.classList.add(opts.animate);
     }
-    if (state.screen === "play" && state.game.q.picked !== null) {
+    if (state.screen === "play" && state.game.q && state.game.q.picked !== null) {
       const reveal = app.querySelector(".reveal");
       const card = app.querySelector(".card");
       if (reveal && card && opts.animate != null) card.scrollTo({ top: reveal.offsetTop - 12, behavior: "smooth" });
@@ -268,6 +334,13 @@
       .join("")}</div>`;
   }
 
+  function trainingDesc() {
+    if (!training.chapters.length) return "Learn three chapters at a time. A new one joins each time you learn one";
+    const st = trainingStatus();
+    if (!st.learning.length && st.learned.length >= st.total) return `All ${st.total} chapters learned · keep them fresh`;
+    return `${st.learned.length} of ${plural(st.total, "chapter")} learned · now ${st.learning.map(shortRef).join(", ")}`;
+  }
+
   function homeHtml() {
     const book = state.mapBook;
     const g = gospel(book);
@@ -297,6 +370,9 @@
         <button type="button" class="btn mode-btn" data-action="start" data-mode="lamps">
           <span class="mode-text"><span class="mode-name">Three lamps</span><span class="mode-desc">Keep going until your three lamps go out</span></span>
           <span class="lamps" aria-hidden="true">${ICON.lamp.replace("<svg", '<svg class="lamp"').repeat(3)}</span>
+        </button>
+        <button type="button" class="btn mode-btn" data-action="start" data-mode="train">
+          <span class="mode-text"><span class="mode-name">Training</span><span class="mode-desc">${esc(trainingDesc())}</span></span>${ICON.sprout}
         </button>
         <button type="button" class="btn btn-ghost mode-btn" data-action="study">
           <span class="mode-text"><span class="mode-name">Study the chapters</span><span class="mode-desc">Browse every event and read the passages</span></span>${ICON.book}
@@ -347,15 +423,69 @@
       </section>`;
   }
 
+  function topbarHtml(g, status) {
+    return `
+      <div class="topbar">
+        <button type="button" class="icon-btn" data-action="quit" aria-label="Quit to home">${ICON.close}</button>
+        ${status}
+        <span class="score tabular" aria-label="${g.mode === "train" ? "Right answers" : "Score"}">${fmt(g.score)}</span>
+      </div>`;
+  }
+
+  // Training's status: the chapters being learned, each filling as you master it.
+  function trainingSetHtml() {
+    const st = trainingStatus();
+    if (!st.learning.length) return `<span class="run">Reviewing all ${plural(st.learned.length, "chapter")}</span>`;
+    const chips = st.learning.map((k) => {
+      const i = k.lastIndexOf(" ");
+      const pr = chapterProgress(k.slice(0, i), Number(k.slice(i + 1)));
+      return `<span class="chip" style="--p:${pr.p.toFixed(3)}"><span class="fill"></span><span class="l">${shortRef(k)}</span></span>`;
+    }).join("");
+    return `<div class="train-set" aria-label="Learning ${st.learning.join(", ")}">${chips}</div>`;
+  }
+
+  // Shown before questions start on new chapters: what happens in each.
+  function introHtml(g) {
+    const first = g.firstIntro;
+    const lede = first
+      ? `Training starts with ${g.intro.length === 1 ? "this chapter" : `these ${["", "", "two", "three"][g.intro.length] || g.intro.length} chapters`}. Read what happens in each, then answer questions on them. Each time you learn a chapter (every event in it right twice in a row), the next one joins.`
+      : `Here’s what happens in ${g.intro.length === 1 ? "it" : "them"}. Questions on ${g.intro.length === 1 ? "it start" : "them start"} now, alongside your other chapters.`;
+    const chapters = g.intro.map((k) => {
+      const i = k.lastIndexOf(" ");
+      const book = k.slice(0, i), ch = Number(k.slice(i + 1));
+      const sec = E.sectionFor(gospel(book), ch);
+      const evs = chapterEvents(book, ch).map((e) => `
+        <li><button type="button" class="intro-ev" data-action="passage" data-id="${e.id}">
+          <span class="t">${esc(e.title)}</span><span class="r">${e.ch}:${e.v[0]}${e.v[1] !== e.v[0] ? "–" + e.v[1] : ""}</span></button></li>`).join("");
+      return `<section class="intro-ch">
+          <h2 class="ref">${esc(k)}</h2>
+          ${sec ? `<p class="meta">Part of <b>${esc(sec.name)}</b></p>` : ""}
+          <ul class="intro-evs">${evs}</ul>
+        </section>`;
+    }).join("");
+    return `
+      ${topbarHtml(g, trainingSetHtml())}
+      <article class="card" aria-live="polite">
+        <div class="card-top"><span class="kind">${first ? "Your first chapters" : g.intro.length === 1 ? "New chapter" : "New chapters"}</span></div>
+        <p class="intro-lede">${lede}</p>
+        ${chapters}
+        <p class="meta">Tap an event to read it.</p>
+      </article>
+      <div class="actions"><button type="button" class="btn btn-primary" data-action="begin">${first ? "Start training" : "Carry on"} ${ICON.arrow}</button></div>`;
+  }
+
   function playHtml() {
     const g = state.game;
+    if (!g.q) return introHtml(g);
     const q = g.q;
     const e = byId[q.id];
     const answered = q.picked !== null;
-    const ok = answered && same(q.choices[q.picked], e);
+    const ok = answered && q.picked >= 0 && isRight(q, q.choices[q.picked]);
 
     let status;
-    if (g.mode === "round") {
+    if (g.mode === "train") {
+      status = trainingSetHtml();
+    } else if (g.mode === "round") {
       const pips = Array.from({ length: ROUND_LENGTH }, (_, i) => {
         const h = g.history[i];
         const cls = h ? (h.ok ? "is-right" : "is-wrong") : i === g.history.length ? "is-now" : "";
@@ -367,27 +497,35 @@
       status = `<div class="lamps" aria-label="${plural(g.lamps, "lamp")} left">${lamps}<span class="run">Run <b class="tabular">${g.streak}</b></span></div>`;
     }
 
-    const clue = q.type === "verse"
-      ? `<p class="verse">${esc(E.cleanVerse(E.verseText(TEXT, e, e.key)))}</p>`
-      : `<h2 class="event-title">${esc(e.title)}</h2><p class="clue">${esc(e.clue)}</p>`;
+    const clue = q.type === "chapter"
+      ? `<h2 class="chapter-ask">${esc(e.book)} ${e.ch}</h2>`
+      : q.type === "verse"
+        ? `<p class="verse">${esc(E.cleanVerse(E.verseText(TEXT, e, e.key)))}</p>`
+        : `<h2 class="event-title">${esc(e.title)}</h2><p class="clue">${esc(e.clue)}</p>`;
 
     const choices = q.choices.map((c, i) => {
-      let cls = "choice";
+      let cls = q.type === "chapter" ? "choice choice-event" : "choice";
       if (q.removed.includes(i)) cls += " is-removed";
       if (answered) {
-        if (same(c, e)) cls += " is-right";
+        if (isRight(q, c)) cls += " is-right";
         else if (i === q.picked) cls += " is-wrong";
         else cls += " is-faded";
       }
-      const label = `${c.book} ${c.ch}`;
-      return `<button type="button" class="${cls}" data-action="answer" data-index="${i}" ${answered || q.removed.includes(i) ? "disabled" : ""} aria-label="${label}">
+      const attrs = `class="${cls}" data-action="answer" data-index="${i}" ${answered || q.removed.includes(i) ? "disabled" : ""}`;
+      if (q.type === "chapter") {
+        return `<button type="button" ${attrs}><span class="key" aria-hidden="true">${i + 1}</span><span class="title">${esc(c.title)}</span></button>`;
+      }
+      return `<button type="button" ${attrs} aria-label="${c.book} ${c.ch}">
         <span class="key" aria-hidden="true">${i + 1}</span><span class="book">${c.book}</span><span class="num">${c.ch}</span></button>`;
     }).join("");
 
     let actions;
     if (answered) {
       const last = (g.mode === "round" && g.history.length >= ROUND_LENGTH) || (g.mode === "lamps" && g.lamps <= 0);
-      actions = `<div class="actions"><button type="button" class="btn btn-primary" data-action="next">${last ? "See results" : "Next"} ${ICON.arrow}</button></div>`;
+      const label = last ? "See results" : g.mode === "train" && g.intro.length ? `Meet ${g.intro.join(", ")}` : "Next";
+      actions = `<div class="actions"><button type="button" class="btn btn-primary" data-action="next">${esc(label)} ${ICON.arrow}</button></div>`;
+    } else if (g.mode === "train") {
+      actions = `<div class="actions two"><button type="button" class="btn btn-small hint-btn" data-action="dunno">Show me</button><span></span></div>`;
     } else {
       actions = `<div class="actions two">
         <button type="button" class="btn btn-small hint-btn" data-action="hint" ${q.hinted ? "disabled" : ""}>${q.hinted ? "50/50 used" : "50/50"}</button>
@@ -396,19 +534,15 @@
     }
 
     return `
-      <div class="topbar">
-        <button type="button" class="icon-btn" data-action="quit" aria-label="Quit to home">${ICON.close}</button>
-        ${status}
-        <span class="score tabular" aria-label="Score">${fmt(g.score)}</span>
-      </div>
+      ${topbarHtml(g, status)}
       <article class="card${answered ? "" : " is-asking"}" aria-live="polite">
         <div class="card-top">
-          <span class="kind">${settings.books.length > 1 ? (q.type === "verse" ? "Which Gospel and chapter is this verse in?" : "Which Gospel and chapter?") : q.type === "verse" ? "Which chapter is this verse in?" : "Which chapter is this in?"}</span>
+          <span class="kind">${q.type === "chapter" ? "What happens in this chapter?" : settings.books.length > 1 ? (q.type === "verse" ? "Which Gospel and chapter is this verse in?" : "Which Gospel and chapter?") : q.type === "verse" ? "Which chapter is this verse in?" : "Which chapter is this in?"}</span>
         </div>
         ${clue}
         ${answered ? revealHtml(e, ok, q) : ""}
       </article>
-      <div class="choices">${choices}</div>
+      <div class="choices${q.type === "chapter" ? " is-events" : q.choices.length === 3 ? " is-three" : ""}">${choices}</div>
       ${actions}`;
   }
 
@@ -416,15 +550,22 @@
     const g = gospel(e.book);
     const sec = E.sectionFor(g, e.ch);
     const range = sec ? (sec.from === sec.to ? `ch. ${sec.from}` : `ch. ${sec.from}–${sec.to}`) : "";
+    const picked = q.picked >= 0 ? q.choices[q.picked] : null;
     const verdict = ok
       ? `Right!${q.points && q.points.total ? ` +${q.points.total}` : ""}${q.points && q.points.speed ? ` (speed +${q.points.speed}${q.points.streak ? `, streak +${q.points.streak}` : ""})` : q.points && q.points.streak ? ` (streak +${q.points.streak})` : ""}`
-      : `Not quite. You picked ${q.choices[q.picked].book} ${q.choices[q.picked].ch}.`;
-    const keyVerse = q.type === "event"
+      : !picked ? "Here’s the answer."
+        : q.type === "chapter" ? `Not quite. “${picked.title}” is in ${picked.book} ${picked.ch}.`
+          : `Not quite. You picked ${picked.book} ${picked.ch}.`;
+    const learned = q.learned
+      ? `<p class="learned" role="status">${esc(q.learned)} learned!${state.game.intro.length ? ` Next up: ${esc(state.game.intro.join(", "))}.` : ""}</p>`
+      : "";
+    const keyVerse = q.type !== "verse"
       ? `<p class="key-verse">${esc(E.cleanVerse(E.verseText(TEXT, e, e.key)))} <span style="font-style:normal">(${e.ch}:${e.key})</span></p>`
       : `<p class="ref-title">${esc(e.title)}</p>`;
     return `
       <div class="reveal">
-        <p class="verdict ${ok ? "ok" : "miss"}" role="status">${verdict}</p>
+        <p class="verdict ${ok ? "ok" : "miss"}" role="status">${esc(verdict)}</p>
+        ${learned}
         <p class="ref">${esc(E.formatRef(e))}</p>
         ${keyVerse}
         ${sec ? `<p class="meta">Part of <b>${esc(sec.name)}</b> (${range})${sec.mark ? `, ${esc(g.markNote)}` : ""}.</p>` : ""}
@@ -550,6 +691,8 @@
       case "start": startGame(el.dataset.mode); window.scrollTo(0, 0); break;
       case "answer": answer(Number(el.dataset.index)); break;
       case "hint": useHint(); break;
+      case "dunno": answer(-1); break;
+      case "begin": beginTraining(); break;
       case "next": nextQuestion(); break;
       case "quit": state.game = null; state.screen = "home"; render({ scrollTop: true }); break;
       case "home": state.screen = "home"; render({ scrollTop: true }); break;
@@ -582,8 +725,8 @@
           setTimeout(() => { if (state.resetArmed) { state.resetArmed = false; if (state.screen === "home") render(); } }, 4000);
         } else {
           state.resetArmed = false;
-          stats = {}; bests = { round: 0, lamps: 0, run: 0 };
-          store.remove("cv.stats"); store.remove("cv.bests");
+          stats = {}; bests = { round: 0, lamps: 0, run: 0 }; training = { chapters: [] };
+          store.remove("cv.stats"); store.remove("cv.bests"); store.remove("cv.training");
           render();
         }
         break;
@@ -595,6 +738,11 @@
     if (state.sheet) { if (ev.key === "Escape") { state.sheet = null; render(); } return; }
     if (state.screen !== "play") return;
     const q = state.game.q;
+    if (!q) { // training's chapter introduction
+      if (ev.key === "Enter" && !(ev.target instanceof HTMLButtonElement && ev.target.dataset.action !== "begin")) { beginTraining(); ev.preventDefault(); }
+      else if (ev.key === "Escape") { state.game = null; state.screen = "home"; render(); }
+      return;
+    }
     if (q.picked === null && /^[1-4]$/.test(ev.key)) { answer(Number(ev.key) - 1); ev.preventDefault(); }
     else if (q.picked === null && ev.key.toLowerCase() === "h") useHint();
     else if (q.picked !== null && ev.key === "Enter" && !(ev.target instanceof HTMLButtonElement && ev.target.dataset.action !== "next")) { nextQuestion(); ev.preventDefault(); }
