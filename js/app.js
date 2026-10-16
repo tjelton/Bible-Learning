@@ -8,6 +8,7 @@
   const ROUND_LENGTH = 10;
   const LAMPS = 3;
   const BOOKS = E.BOOK_ORDER;
+  const BOOK_ABBR = { Matthew: "Mt", Mark: "Mk", Luke: "Lk", John: "Jn" };
 
   // ── Saved data (this device only) ──
   const store = {
@@ -27,7 +28,11 @@
   const byId = {};
   for (const e of E.eventPool(GOSPELS, BOOKS)) byId[e.id] = e;
 
-  let state = { screen: "home", game: null, study: { book: "Matthew", ch: null, open: null }, sheet: null, resetArmed: false };
+  let state = {
+    screen: "home", game: null, sheet: null, resetArmed: false,
+    mapBook: settings.books[0],
+    study: { book: settings.books[0], ch: null, open: null },
+  };
   const app = document.getElementById("app");
 
   // ── Helpers ──
@@ -50,9 +55,11 @@
     const done = evs.filter((e) => E.isMastered(stats[e.id])).length;
     return { done, total: evs.length, p: evs.length ? done / evs.length : 0 };
   }
-  function isTeachingChapter(book, ch) {
+  // Chapters in a section the book's outline highlights (Matthew's teaching
+  // blocks, Luke's journey to Jerusalem, John's farewell discourse).
+  function isMarkedChapter(book, ch) {
     const s = E.sectionFor(gospel(book), ch);
-    return !!(s && s.discourse);
+    return !!(s && s.mark);
   }
   function saveSettings() { store.set("cv.settings", settings); }
 
@@ -248,14 +255,21 @@
     let out = "";
     for (let c = from; c <= to; c++) {
       const pr = chapterProgress(book, c);
-      const cls = ["tile", pr.p >= 1 ? "is-done" : "", isTeachingChapter(book, c) ? "is-teaching" : ""].join(" ");
+      const cls = ["tile", pr.p >= 1 ? "is-done" : "", isMarkedChapter(book, c) ? "is-marked" : ""].join(" ");
       out += `<button type="button" class="${cls}" style="--p:${pr.p.toFixed(3)}" data-action="chapter" data-book="${book}" data-ch="${c}" aria-label="${book} ${c}: ${pr.done} of ${pr.total} mastered"><span class="fill"></span><span class="n">${c}</span></button>`;
     }
     return out;
   }
 
+  // A row of Gospel tabs that switches which book a screen shows.
+  function bookTabs(action, current) {
+    return `<div class="segmented" role="group" aria-label="Gospel">${BOOKS.filter((b) => GOSPELS[b])
+      .map((b) => `<button type="button" data-action="${action}" data-book="${b}" aria-pressed="${current === b}">${b}</button>`)
+      .join("")}</div>`;
+  }
+
   function homeHtml() {
-    const book = "Matthew";
+    const book = state.mapBook;
     const g = gospel(book);
     const mastered = g.events.filter((e) => E.isMastered(stats[e.id])).length;
     const bookToggles = BOOKS.map((b) => {
@@ -273,7 +287,7 @@
       <header class="masthead">
         <p class="eyebrow">A Gospel game</p>
         <h1>Chapter <span class="amp">&amp;</span> Verse</h1>
-        <p class="lede">Read a moment from the Gospel. Name the chapter it comes from.</p>
+        <p class="lede">Read a moment from the Gospels. Name the chapter it comes from.</p>
       </header>
 
       <section class="play-buttons" aria-label="Play">
@@ -295,10 +309,11 @@
           <h2 id="map-title">Your map of ${book}</h2>
           <span class="note tabular">${mastered} of ${g.events.length} mastered</span>
         </div>
+        ${bookTabs("map-book", book)}
         <div class="map">${mapTiles(book, 1, g.chapters)}</div>
         <div class="map-legend">
           <span><i class="swatch"></i>Fills as you master events (right twice in a row)</span>
-          <span><i class="dot"></i>One of Matthew's five teaching blocks</span>
+          ${g.markLegend ? `<span><i class="dot"></i>${esc(g.markLegend)}</span>` : ""}
         </div>
       </section>
 
@@ -307,6 +322,7 @@
         <div class="option">
           <span class="option-label">Gospels</span>
           <div class="books">${bookToggles}</div>
+          <span class="option-help">Turn on more than one to mix them. Then you pick the Gospel as well as the chapter.</span>
         </div>
         <div class="option">
           <span class="option-label">Clues</span>
@@ -387,7 +403,7 @@
       </div>
       <article class="card${answered ? "" : " is-asking"}" aria-live="polite">
         <div class="card-top">
-          <span class="kind">${q.type === "verse" ? "Which chapter is this verse in?" : "Which chapter is this in?"}</span>
+          <span class="kind">${settings.books.length > 1 ? (q.type === "verse" ? "Which Gospel and chapter is this verse in?" : "Which Gospel and chapter?") : q.type === "verse" ? "Which chapter is this verse in?" : "Which chapter is this in?"}</span>
         </div>
         ${clue}
         ${answered ? revealHtml(e, ok, q) : ""}
@@ -411,7 +427,8 @@
         <p class="verdict ${ok ? "ok" : "miss"}" role="status">${verdict}</p>
         <p class="ref">${esc(E.formatRef(e))}</p>
         ${keyVerse}
-        ${sec ? `<p class="meta">Part of <b>${esc(sec.name)}</b> (${range})${sec.discourse ? ", one of Matthew's five teaching blocks" : ""}.</p>` : ""}
+        ${sec ? `<p class="meta">Part of <b>${esc(sec.name)}</b> (${range})${sec.mark ? `, ${esc(g.markNote)}` : ""}.</p>` : ""}
+        ${e.note ? `<p class="meta note">${esc(e.note)}</p>` : ""}
         ${e.par && e.par.length ? `<p class="meta">Also told in ${e.par.map(esc).join(" · ")}</p>` : `<p class="meta">Only ${esc(e.book)} tells this.</p>`}
         <button type="button" class="link-btn" data-action="passage" data-id="${e.id}">${ICON.book} Read ${esc(E.formatRef(e))}</button>
       </div>`;
@@ -431,7 +448,7 @@
       return `<button type="button" class="review-item" data-action="passage" data-id="${e.id}">
         <span class="mark ${h.ok ? "ok" : "miss"}" aria-label="${h.ok ? "Right" : "Wrong"}">${h.ok ? "✓" : "✕"}</span>
         <span class="t">${esc(e.title)}<span class="sub">${esc(sub)}</span></span>
-        <span class="r">${e.ch}:${e.v[0]}${e.v[1] !== e.v[0] ? "–" + e.v[1] : ""}</span></button>`;
+        <span class="r">${BOOK_ABBR[e.book]} ${e.ch}:${e.v[0]}${e.v[1] !== e.v[0] ? "–" + e.v[1] : ""}</span></button>`;
     }).join("");
     return `
       <header class="results-head">
@@ -458,7 +475,7 @@
       const secs = g.sections.map((sec) => `
         <div class="sec">
           <div class="sec-head">
-            <span class="sec-name">${esc(sec.name)}${sec.discourse ? `<span class="tag">Teaching block</span>` : ""}</span>
+            <span class="sec-name">${esc(sec.name)}${sec.mark ? `<span class="tag">${esc(g.markTag)}</span>` : ""}</span>
             <span class="sec-range">${sec.from === sec.to ? `Chapter ${sec.from}` : `Chapters ${sec.from}–${sec.to}`}</span>
           </div>
           <div class="map">${mapTiles(s.book, sec.from, sec.to)}</div>
@@ -468,7 +485,8 @@
           <button type="button" class="icon-btn" data-action="home" aria-label="Back to home">${ICON.back}</button>
           <h1>Study ${esc(s.book)}</h1>
         </div>
-        <p class="study-intro">Matthew is built around five long blocks of Jesus' teaching, each ending with words like “when Jesus had finished these sayings.” Learn those five (chapters 5–7, 10, 13, 18 and 24–25) and the stories fall into place between them.</p>
+        ${bookTabs("study-book", s.book)}
+        <p class="study-intro">${esc(g.intro)}</p>
         <div class="sections">${secs}</div>`;
     }
     const sec = E.sectionFor(g, s.ch);
@@ -483,6 +501,7 @@
         ${open ? `<div class="ev-body">
           <p class="clue">${esc(e.clue)}</p>
           ${e.par && e.par.length ? `<p class="meta">Also told in ${e.par.map(esc).join(" · ")}</p>` : `<p class="meta">Only ${esc(e.book)} tells this.</p>`}
+          ${e.note ? `<p class="meta note">${esc(e.note)}</p>` : ""}
           <button type="button" class="link-btn" data-action="passage" data-id="${e.id}">${ICON.book} Read the passage</button>
         </div>` : ""}
       </div>`;
@@ -494,7 +513,7 @@
       </div>
       <header class="chapter-head">
         <h1 class="big">${esc(s.book)} ${s.ch}</h1>
-        <p class="meta">${plural(chapterEvents(s.book, s.ch).length, "event")} · ${chapterProgress(s.book, s.ch).done} mastered${sec && sec.discourse ? " · part of a teaching block" : ""}</p>
+        <p class="meta">${plural(chapterEvents(s.book, s.ch).length, "event")} · ${chapterProgress(s.book, s.ch).done} mastered${sec && sec.mark ? ` · ${esc(g.markNote)}` : ""}</p>
       </header>
       <div class="events">${evs}</div>
       <div class="chapter-nav">
@@ -534,7 +553,9 @@
       case "next": nextQuestion(); break;
       case "quit": state.game = null; state.screen = "home"; render({ scrollTop: true }); break;
       case "home": state.screen = "home"; render({ scrollTop: true }); break;
-      case "study": state.screen = "study"; state.study.ch = null; render({ scrollTop: true }); break;
+      case "study": state.screen = "study"; state.study = { book: state.mapBook, ch: null, open: null }; render({ scrollTop: true }); break;
+      case "map-book": state.mapBook = el.dataset.book; render(); break;
+      case "study-book": state.study = { book: el.dataset.book, ch: null, open: null }; render(); break;
       case "study-back": state.study.ch = null; render({ scrollTop: true }); break;
       case "chapter":
         state.screen = "study";

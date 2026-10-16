@@ -1,19 +1,22 @@
 // Validates the event data against the Bible text and prints each passage's
 // boundaries so references can be proof-read by eye.
 //
-// Usage: node scripts/check-data.mjs [--print]
+// Usage: node scripts/check-data.mjs [--print [Book]]
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 
 const root = new URL("../js/data/", import.meta.url);
 const ctx = { window: {} };
 vm.createContext(ctx);
-for (const f of ["matthew.js", "text-matthew.js"]) {
+const BOOKS = ["matthew", "mark", "luke", "john"];
+for (const f of BOOKS.flatMap((b) => [`${b}.js`, `text-${b}.js`])) {
   vm.runInContext(readFileSync(new URL(f, root), "utf8"), ctx, { filename: f });
 }
 const { GOSPELS, BIBLE_TEXT } = ctx.window;
 const CHAPTER_COUNTS = { Matthew: 28, Mark: 16, Luke: 24, John: 21 };
-const print = process.argv.includes("--print");
+const printAt = process.argv.indexOf("--print");
+const printBook = printAt >= 0 ? process.argv[printAt + 1] : undefined;
+const shouldPrint = (book) => printAt >= 0 && (!printBook || printBook === book);
 const errors = [];
 const ids = new Set();
 const cut = (s, n = 110) => (s.length > n ? s.slice(0, n) + "…" : s);
@@ -27,6 +30,7 @@ for (const g of Object.values(GOSPELS)) {
     if (ids.has(e.id)) errors.push(`${where}: duplicate id`);
     ids.add(e.id);
     for (const k of ["id", "title", "clue"]) if (!e[k]) errors.push(`${where}: missing ${k}`);
+    if (/['"]/.test(e.title + e.clue)) errors.push(`${where}: use curly quotes and apostrophes`);
     const verses = text[e.ch];
     if (!verses) { errors.push(`${where}: chapter out of range`); continue; }
     covered.add(e.ch);
@@ -40,7 +44,7 @@ for (const g of Object.values(GOSPELS)) {
     for (const c of e.confuse || []) {
       if (c === e.ch || c < 1 || c > g.chapters) errors.push(`${where}: bad confuse chapter ${c}`);
     }
-    if (print) {
+    if (shouldPrint(g.book)) {
       console.log(`\n■ ${g.book} ${e.ch}:${a}–${b}  ${e.title}`);
       if (a > 1) console.log(`   (prev ${a - 1}) ${cut(verses[a - 2])}`);
       console.log(`   [${a}] ${cut(verses[a - 1])}`);
@@ -50,6 +54,15 @@ for (const g of Object.values(GOSPELS)) {
     }
   }
   for (let c = 1; c <= g.chapters; c++) if (!covered.has(c)) errors.push(`${g.book} ${c}: no events`);
+  if (Object.keys(text).length !== g.chapters) errors.push(`${g.book}: text has ${Object.keys(text).length} chapters, data says ${g.chapters}`);
+  let prev = 0;
+  for (const s of g.sections) {
+    if (s.from !== prev + 1 || s.to < s.from) errors.push(`${g.book}: sections must run in order without gaps (at ${s.from}–${s.to})`);
+    prev = s.to;
+  }
+  if (prev !== g.chapters) errors.push(`${g.book}: sections stop at chapter ${prev}`);
+  if (!g.intro) errors.push(`${g.book}: missing intro`);
+  if (g.sections.some((s) => s.mark) && !(g.markNote && g.markLegend && g.markTag)) errors.push(`${g.book}: marked sections need markNote, markLegend and markTag`);
   console.error(`${g.book}: ${g.events.length} events across ${covered.size}/${g.chapters} chapters`);
 }
 

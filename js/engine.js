@@ -70,68 +70,118 @@
     return 0.5;
   }
 
-  // Weighted sample of n events without replacement, skipping ids in `avoid`
-  // unless there aren't enough others.
+  // Two events from different Gospels that tell the same story (by their
+  // chapter-level parallels), e.g. the feeding of the 5,000 in Mark 6 and John 6.
+  function sameStory(a, b) {
+    if (a.book === b.book) return false;
+    return (a.par || []).includes(key(b.book, b.ch)) || (b.par || []).includes(key(a.book, a.ch));
+  }
+
+  // Weighted sample of n events without replacement. Events in `avoid` (ids),
+  // and other Gospels' tellings of the same stories, are skipped unless there
+  // aren't enough others.
   function pickEvents(pool, stats, n, rng, avoid) {
     const avoidSet = new Set(avoid || []);
-    let candidates = pool.filter((e) => !avoidSet.has(e.id));
-    if (candidates.length < n) candidates = pool.slice();
-    // Efraimidis–Spirakis: sort by u^(1/w), take the top n.
-    const keyed = candidates.map((e) => ({ e, k: Math.pow(rng(), 1 / weightFor(stats[e.id])) }));
-    keyed.sort((a, b) => b.k - a.k);
-    return keyed.slice(0, n).map((x) => x.e);
+    const avoided = pool.filter((e) => avoidSet.has(e.id));
+    // Efraimidis–Spirakis: sort by u^(1/w) and take from the top.
+    const keyed = pool
+      .map((e) => ({ e, k: Math.pow(rng(), 1 / weightFor(stats[e.id])) }))
+      .sort((a, b) => b.k - a.k)
+      .map((x) => x.e);
+    const out = [];
+    const passes = [
+      (e) => !avoidSet.has(e.id) && !out.some((o) => sameStory(o, e)) && !avoided.some((a) => sameStory(a, e)),
+      (e) => !avoidSet.has(e.id),
+      () => true,
+    ];
+    for (const ok of passes) {
+      for (const e of keyed) {
+        if (out.length >= n) return out;
+        if (!out.includes(e) && ok(e)) out.push(e);
+      }
+    }
+    return out;
   }
 
   // ── Answer choices ──
   // Returns 4 choices [{book, ch}] including the right one, sorted in Bible order.
   // Chapters that tell the same event (parallels) are never used as wrong answers.
+  //
+  // With several Gospels on, the mix of books must not give the answer away
+  // (e.g. three Matthew options and one Luke would point at Matthew). Each
+  // question uses one layout: all four from the right Gospel, two from it and
+  // two from another, or one from each of four Gospels.
   function buildChoices(event, gospels, books, difficulty, rng) {
     const enabled = BOOK_ORDER.filter((b) => books.includes(b) && gospels[b]);
-    const correctKey = key(event.book, event.ch);
-    const banned = new Set([correctKey].concat(event.par || []));
-    const all = [];
-    for (const b of enabled) {
-      for (let c = 1; c <= gospels[b].chapters; c++) {
-        if (!banned.has(key(b, c))) all.push({ book: b, ch: c });
-      }
-    }
-    const sameBook = all.filter((o) => o.book === event.book);
-    const dist = (o) => Math.abs(o.ch - event.ch);
+    const banned = new Set([key(event.book, event.ch)].concat(event.par || []));
+    const open = (b) => {
+      const out = [];
+      for (let c = 1; c <= gospels[b].chapters; c++) if (!banned.has(key(b, c))) out.push({ book: b, ch: c });
+      return out;
+    };
     const picked = [];
     const has = (o) => picked.some((p) => p.book === o.book && p.ch === o.ch);
-    const take = (list, count) => {
+    // Adds up to `count` new options from `list`, stopping once `upTo` are picked.
+    const take = (list, count, upTo) => {
       for (const o of shuffle(list, rng)) {
-        if (picked.length >= 3 || count <= 0) break;
+        if (picked.length >= upTo || count <= 0) break;
         if (!has(o)) { picked.push(o); count--; }
       }
     };
-    const confusers = (event.confuse || [])
-      .map((c) => ({ book: event.book, ch: c }))
-      .filter((o) => !banned.has(key(o.book, o.ch)));
-    const otherBooksSameNumber = all.filter((o) => o.book !== event.book && Math.abs(o.ch - event.ch) <= 1);
 
-    if (difficulty === "easy") {
-      // Spread out: no neighbours, so knowing roughly where you are in the book is enough.
-      take(sameBook.filter((o) => dist(o) >= 4), enabled.length > 1 ? 2 : 3);
-      take(all.filter((o) => o.book !== event.book), 3);
-      take(all, 3);
-    } else if (difficulty === "hard") {
-      // A run of neighbouring chapters with the answer at a random spot, plus a look-alike.
-      const n = gospels[event.book].chapters;
-      const start = Math.min(Math.max(1, event.ch - randInt(rng, 4)), Math.max(1, n - 3));
-      const window = sameBook.filter((o) => o.ch >= start && o.ch < start + 4);
-      take(confusers, 1);
-      take(otherBooksSameNumber, enabled.length > 1 ? 1 : 0);
-      take(window, 3);
-      take(sameBook.filter((o) => dist(o) <= 3), 3);
-      take(all, 3);
-    } else {
-      take(confusers, 1);
-      take(sameBook.filter((o) => dist(o) <= 3), 1);
-      take(otherBooksSameNumber, enabled.length > 1 ? 1 : 0);
-      take(sameBook.filter((o) => dist(o) <= 6), 1);
-      take(all, 3);
+    // Wrong answers from the right Gospel, chosen by difficulty.
+    function fromSameBook(count) {
+      const upTo = picked.length + count;
+      const sameBook = open(event.book);
+      const dist = (o) => Math.abs(o.ch - event.ch);
+      const confusers = (event.confuse || [])
+        .map((c) => ({ book: event.book, ch: c }))
+        .filter((o) => !banned.has(key(o.book, o.ch)));
+      if (difficulty === "easy") {
+        // Spread out: no neighbours, so knowing roughly where you are in the book is enough.
+        take(sameBook.filter((o) => dist(o) >= 4), count, upTo);
+      } else if (difficulty === "hard") {
+        // A run of neighbouring chapters with the answer at a random spot, plus a look-alike.
+        const n = gospels[event.book].chapters;
+        const start = Math.min(Math.max(1, event.ch - randInt(rng, 4)), Math.max(1, n - 3));
+        take(confusers, 1, upTo);
+        take(sameBook.filter((o) => o.ch >= start && o.ch < start + 4), count, upTo);
+        take(sameBook.filter((o) => dist(o) <= 3), count, upTo);
+      } else {
+        take(confusers, 1, upTo);
+        take(sameBook.filter((o) => dist(o) <= 3), 1, upTo);
+        take(sameBook.filter((o) => dist(o) <= 6), count, upTo);
+      }
+      take(sameBook, count, upTo);
     }
+
+    // Wrong answers from another Gospel, near the same point in that book
+    // (unless the difficulty is "spread out").
+    function fromBook(b, count) {
+      const upTo = picked.length + count;
+      const list = open(b);
+      const target = Math.round((event.ch / gospels[event.book].chapters) * gospels[b].chapters);
+      const reach = difficulty === "hard" ? 2 : 4;
+      if (difficulty !== "easy") take(list.filter((o) => Math.abs(o.ch - target) <= reach), count, upTo);
+      take(list, count, upTo);
+    }
+
+    const others = shuffle(enabled.filter((b) => b !== event.book), rng);
+    if (!others.length) {
+      fromSameBook(3);
+    } else {
+      const r = rng();
+      if (r < 0.25) {
+        fromSameBook(3);
+      } else if (r < 0.75 || others.length < 3) {
+        fromSameBook(1);
+        fromBook(others[0], 2);
+      } else {
+        for (const b of others.slice(0, 3)) fromBook(b, 1);
+      }
+    }
+    // Only reached with tiny books or many parallels: fill from anything left.
+    for (const b of enabled) if (picked.length < 3) take(open(b), 3, 3);
 
     const choices = picked.slice(0, 3).concat([{ book: event.book, ch: event.ch }]);
     choices.sort((a, b) => BOOK_ORDER.indexOf(a.book) - BOOK_ORDER.indexOf(b.book) || a.ch - b.ch);
@@ -209,7 +259,7 @@
   const Engine = {
     BOOK_ORDER, QUESTION_TIME_MS, MASTERED_BOX, RANKS,
     seededRng, shuffle, formatRef, sectionFor, eventPool,
-    recordAnswer, isMastered, weightFor, pickEvents,
+    recordAnswer, isMastered, weightFor, sameStory, pickEvents,
     buildChoices, fiftyFifty, scoreAnswer, rankFor,
     cleanVerse, verseText, passage,
   };

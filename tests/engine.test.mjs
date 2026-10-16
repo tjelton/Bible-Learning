@@ -10,19 +10,13 @@ const Engine = require("../js/engine.js");
 
 const ctx = { window: {} };
 vm.createContext(ctx);
-for (const f of ["matthew.js", "text-matthew.js"]) {
+const ALL = ["Matthew", "Mark", "Luke", "John"];
+for (const f of ALL.flatMap((b) => [`${b.toLowerCase()}.js`, `text-${b.toLowerCase()}.js`])) {
   vm.runInContext(readFileSync(new URL(`../js/data/${f}`, import.meta.url), "utf8"), ctx);
 }
 const { GOSPELS, BIBLE_TEXT } = ctx.window;
 const pool = Engine.eventPool(GOSPELS, ["Matthew"]);
-
-// A made-up second Gospel to exercise the multi-book code paths.
-const FAKE = Object.assign({}, GOSPELS, {
-  Mark: {
-    book: "Mark", chapters: 16, sections: [{ from: 1, to: 16, name: "All" }],
-    events: [{ id: "mk-x", title: "x", ch: 6, v: [35, 44], key: 41, clue: "x", par: ["Matthew 14", "Luke 9", "John 6"] }],
-  },
-});
+const allPool = Engine.eventPool(GOSPELS, ALL);
 
 const same = (a, b) => a.book === b.book && a.ch === b.ch;
 
@@ -70,16 +64,76 @@ test("the answer isn't always in the same position", () => {
   for (const n of counts) assert.ok(n / total > 0.12, `position spread ${counts}`);
 });
 
-test("parallel accounts are never offered as wrong answers", () => {
-  const e = Object.assign({ book: "Mark" }, FAKE.Mark.events[0]);
-  for (let seed = 1; seed <= 300; seed++) {
-    for (const d of ["easy", "normal", "hard"]) {
-      const choices = Engine.buildChoices(e, FAKE, ["Matthew", "Mark"], d, Engine.seededRng(seed));
-      assert.equal(choices.length, 4);
-      assert.ok(!choices.some((c) => c.book === "Matthew" && c.ch === 14), "Matthew 14 is a parallel");
-      assert.ok(choices.some((c) => same(c, e)));
+test("with all four Gospels on, every event gets 4 valid choices and no parallel is a wrong answer", () => {
+  for (const difficulty of ["easy", "normal", "hard"]) {
+    for (let seed = 1; seed <= 10; seed++) {
+      const rng = Engine.seededRng(seed);
+      for (const e of allPool) {
+        const choices = Engine.buildChoices(e, GOSPELS, ALL, difficulty, rng);
+        assert.equal(choices.length, 4, `${e.id} ${difficulty}`);
+        assert.equal(new Set(choices.map((c) => c.book + c.ch)).size, 4, `${e.id} duplicate choice`);
+        assert.equal(choices.filter((c) => same(c, e)).length, 1, `${e.id} missing answer`);
+        for (const c of choices) {
+          assert.ok(c.ch >= 1 && c.ch <= GOSPELS[c.book].chapters, `${e.id}: ${c.book} ${c.ch} out of range`);
+          if (!same(c, e)) assert.ok(!(e.par || []).includes(`${c.book} ${c.ch}`), `${e.id}: parallel ${c.book} ${c.ch} offered`);
+        }
+        const order = choices.map((c) => ALL.indexOf(c.book) * 100 + c.ch);
+        assert.deepEqual(order, [...order].sort((a, b) => a - b), "choices are in Bible order");
+      }
     }
   }
+});
+
+test("with several Gospels on, wrong answers come from more than one book", () => {
+  const rng = Engine.seededRng(21);
+  let mixed = 0;
+  for (const e of allPool) {
+    const books = new Set(Engine.buildChoices(e, GOSPELS, ALL, "normal", rng).map((c) => c.book));
+    if (books.size > 1) mixed++;
+  }
+  // About a quarter of questions keep all four choices in one Gospel on purpose.
+  const share = mixed / allPool.length;
+  assert.ok(share > 0.6 && share < 0.9, `${mixed} of ${allPool.length}`);
+});
+
+test("with several Gospels on, the mix of books never gives the answer away", () => {
+  for (const books of [ALL, ["Matthew", "Luke"], ["Mark", "Luke", "John"]]) {
+    const events = Engine.eventPool(GOSPELS, books);
+    const layouts = { same: 0, pairs: 0, spread: 0 };
+    for (let seed = 1; seed <= 5; seed++) {
+      const rng = Engine.seededRng(seed);
+      for (const e of events) {
+        const counts = {};
+        for (const c of Engine.buildChoices(e, GOSPELS, books, "normal", rng)) counts[c.book] = (counts[c.book] || 0) + 1;
+        const values = Object.values(counts);
+        // The answer's book must never be the odd one out or the clear majority.
+        if (values.length === 1) layouts.same++;
+        else if (values.every((v) => v === 2)) layouts.pairs++;
+        else if (values.every((v) => v === 1)) layouts.spread++;
+        else assert.fail(`${e.id} with ${books}: ${JSON.stringify(counts)}`);
+      }
+    }
+    assert.ok(layouts.same > 0 && layouts.pairs > 0, JSON.stringify(layouts));
+    if (books.length === 4) assert.ok(layouts.spread > 0, JSON.stringify(layouts));
+  }
+});
+
+test("a round doesn't ask the same story twice from different Gospels", () => {
+  for (let seed = 1; seed <= 200; seed++) {
+    const picked = Engine.pickEvents(allPool, {}, 10, Engine.seededRng(seed));
+    assert.equal(picked.length, 10);
+    for (let i = 0; i < picked.length; i++) {
+      for (let j = i + 1; j < picked.length; j++) {
+        assert.ok(!Engine.sameStory(picked[i], picked[j]), `${picked[i].id} and ${picked[j].id}`);
+      }
+    }
+  }
+});
+
+test("pickEvents still fills the round from a tiny pool", () => {
+  const tiny = allPool.filter((e) => e.par && e.par.includes("Matthew 14"));
+  const picked = Engine.pickEvents(tiny, {}, tiny.length, Engine.seededRng(1));
+  assert.equal(picked.length, tiny.length);
 });
 
 test("50/50 removes exactly two wrong answers", () => {
@@ -154,7 +208,7 @@ test("cleanVerse balances quotes and marks partial sentences", () => {
 });
 
 test("every key verse cleans up without stray quote marks", () => {
-  for (const e of pool) {
+  for (const e of allPool) {
     const t = Engine.cleanVerse(Engine.verseText(BIBLE_TEXT, e, e.key));
     assert.ok(t.length > 10, e.id);
     assert.ok(!/[“”]/.test(t), `${e.id}: ${t}`);

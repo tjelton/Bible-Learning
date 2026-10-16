@@ -14,23 +14,26 @@
 window.GOSPELS = window.GOSPELS || {};
 window.GOSPELS.Matthew = {
   book: "Matthew",
-  abbr: "Mt",
   chapters: 28,
-  // Matthew's big structure. The five teaching blocks (5–7, 10, 13, 18, 24–25)
-  // each end with "when Jesus had finished…".
+  intro: "Matthew is built around five long blocks of Jesus\u2019 teaching, each ending with words like \u201Cwhen Jesus had finished these sayings.\u201D Learn those five (chapters 5\u20137, 10, 13, 18 and 24\u201325) and the stories fall into place between them.",
+  markNote: "one of Matthew\u2019s five teaching blocks",
+  markLegend: "One of Matthew\u2019s five teaching blocks",
+  markTag: "Teaching block",
+  // The five teaching blocks (5–7, 10, 13, 18, 24–25) each end with
+  // "when Jesus had finished…".
   sections: [
     { from: 1, to: 2, name: "Birth and childhood" },
     { from: 3, to: 4, name: "John the Baptist and the start of the ministry" },
-    { from: 5, to: 7, name: "Sermon on the Mount", discourse: true },
+    { from: 5, to: 7, name: "Sermon on the Mount", mark: true },
     { from: 8, to: 9, name: "Miracles of power" },
-    { from: 10, to: 10, name: "Sending out the Twelve", discourse: true },
+    { from: 10, to: 10, name: "Sending out the Twelve", mark: true },
     { from: 11, to: 12, name: "Questions and growing opposition" },
-    { from: 13, to: 13, name: "Parables of the Kingdom", discourse: true },
+    { from: 13, to: 13, name: "Parables of the Kingdom", mark: true },
     { from: 14, to: 17, name: "Loaves, faith and Peter's confession" },
-    { from: 18, to: 18, name: "Life together in the church", discourse: true },
+    { from: 18, to: 18, name: "Life together in the church", mark: true },
     { from: 19, to: 20, name: "On the road to Jerusalem" },
     { from: 21, to: 23, name: "Confrontation in Jerusalem" },
-    { from: 24, to: 25, name: "The end of the age", discourse: true },
+    { from: 24, to: 25, name: "The end of the age", mark: true },
     { from: 26, to: 27, name: "Betrayal, trial and crucifixion" },
     { from: 28, to: 28, name: "Resurrection" },
   ],
@@ -41,7 +44,7 @@ window.GOSPELS.Matthew = {
       par: ["Luke 3"] },
     { id: "mt-joseph-dream", title: "An angel appears to Joseph", ch: 1, v: [18, 25], key: 21,
       clue: "Mary is found to be with child from the Holy Spirit. Joseph plans to send her away quietly, but an angel tells him in a dream to take her as his wife and to name the child Jesus.",
-      par: [], confuse: [2] },
+      par: ["Luke 1", "Luke 2"], confuse: [2] },
 
     // ── Chapter 2 ──
     { id: "mt-magi", title: "The visit of the wise men", ch: 2, v: [1, 12], key: 11,
@@ -55,7 +58,7 @@ window.GOSPELS.Matthew = {
       par: [] },
     { id: "mt-nazareth", title: "The return to Nazareth", ch: 2, v: [19, 23], key: 23,
       clue: "After Herod dies, an angel tells Joseph to go back to Israel. Afraid of Herod’s son Archelaus, who now rules Judea, he settles the family in Galilee, in a city called Nazareth.",
-      par: [] },
+      par: ["Luke 2"] },
 
     // ── Chapter 3 ──
     { id: "mt-john-baptist", title: "John the Baptist preaches", ch: 3, v: [1, 12], key: 4,
@@ -349,7 +352,7 @@ window.GOSPELS.Matthew = {
       par: [], confuse: [19, 21] },
     { id: "mt-zebedee-request", title: "To serve, not to be served", ch: 20, v: [20, 28], key: 28,
       clue: "The mother of the sons of Zebedee asks that her two sons sit at Jesus’ right and left hand in his Kingdom. Jesus says the one who wants to be great must be a servant, for the Son of Man came to serve and give his life as a ransom for many.",
-      par: ["Mark 10"], confuse: [18] },
+      par: ["Mark 10", "Luke 22"], confuse: [18] },
     { id: "mt-jericho-blind", title: "Two blind men near Jericho", ch: 20, v: [29, 34], key: 34,
       clue: "As Jesus leaves Jericho with a great crowd following, two blind men sitting by the road cry out, ‘Lord, have mercy on us, you son of David!’ Moved with compassion, Jesus touches their eyes, and immediately they see.",
       par: ["Mark 10", "Luke 18"], confuse: [9] },
