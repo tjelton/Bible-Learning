@@ -1,3 +1,5 @@
+> Game playable from: [https://tjelton.github.io/Bible-Learning/](https://tjelton.github.io/Bible-Learning/.)
+
 # Chapter & Verse
 
 A quick-fire phone game for learning where the key events of the Gospels are found.
