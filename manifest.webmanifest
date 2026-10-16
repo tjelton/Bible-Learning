@@ -1,0 +1,14 @@
+{
+  "name": "Chapter & Verse",
+  "short_name": "Chapter & Verse",
+  "description": "A quick-fire game for learning where the key events of the Gospels are found.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#edf1ea",
+  "theme_color": "#1f5a44",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "icons/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
