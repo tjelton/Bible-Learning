@@ -11,13 +11,23 @@
   const BOOK_ABBR = { Matthew: "Mt", Mark: "Mk", Luke: "Lk", John: "Jn" };
 
   // ── Saved data (this device only) ──
+  // When the browser blocks storage (Safari with "Block All Cookies", some
+  // in-app browsers) saving fails; the home screen then says so.
   const store = {
+    failed: false,
     get(k, fallback) {
       try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fallback; } catch (_) { return fallback; }
     },
-    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) { /* storage unavailable */ } },
-    remove(k) { try { localStorage.removeItem(k); } catch (_) { /* storage unavailable */ } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) { store.failed = true; } },
+    remove(k) { try { localStorage.removeItem(k); } catch (_) { store.failed = true; } },
   };
+  try {
+    localStorage.setItem("cv.check", "1");
+    if (localStorage.getItem("cv.check") !== "1") store.failed = true;
+    localStorage.removeItem("cv.check");
+  } catch (_) { store.failed = true; }
+  // Ask the browser to keep progress rather than clear it when space runs low.
+  try { navigator.storage.persist().catch(() => {}); } catch (_) { /* not supported */ }
   const DEFAULT_SETTINGS = { books: ["Matthew"], clues: "both", difficulty: "normal", timer: true, sound: true };
   let settings = Object.assign({}, DEFAULT_SETTINGS, store.get("cv.settings", {}));
   settings.books = (settings.books || []).filter((b) => GOSPELS[b]);
@@ -363,6 +373,7 @@
         <p class="lede">Read a moment from the Gospels. Name the chapter it comes from.</p>
       </header>
 
+      ${store.failed ? `<p class="save-warning" role="alert"><b>Progress isn’t being saved.</b> This browser is blocking storage, so everything resets when the page closes. On iPhone, check that Settings → Apps → Safari → Block All Cookies is off, and that you aren’t in a Private tab.</p>` : ""}
       <section class="play-buttons" aria-label="Play">
         <button type="button" class="btn btn-primary mode-btn" data-action="start" data-mode="round">
           <span class="mode-text"><span class="mode-name">Play a round</span><span class="mode-desc">10 questions · bonus points for speed and streaks</span></span>${ICON.arrow}
@@ -419,7 +430,7 @@
           <button type="button" class="switch" role="switch" aria-checked="${settings.sound}" aria-label="Sound" data-action="toggle" data-key="sound"></button>
         </div>
         <button type="button" class="btn btn-small btn-ghost danger" data-action="reset">${state.resetArmed ? "Tap again to erase all progress" : "Reset progress"}</button>
-        <p class="footer-note">Scripture text is the World English Bible, which is in the public domain. Progress is saved on this device only. On iPhone, tap Share → Add to Home Screen to play it like an app.</p>
+        <p class="footer-note">Scripture text is the World English Bible, which is in the public domain. Progress is saved in this browser on this device only. On iPhone, tap Share → Add to Home Screen to play it like an app (the Home Screen app keeps its own progress, separate from Safari’s).</p>
       </section>`;
   }
 
