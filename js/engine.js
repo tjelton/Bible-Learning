@@ -72,20 +72,22 @@
 
   // Two events from different Gospels that tell the same story (by their
   // chapter-level parallels), e.g. the feeding of the 5,000 in Mark 6 and John 6.
+  // Questions without a book can share a `group` instead.
   function sameStory(a, b) {
+    if (a.group && a.group === b.group) return true;
     if (a.book === b.book) return false;
     return (a.par || []).includes(key(b.book, b.ch)) || (b.par || []).includes(key(a.book, a.ch));
   }
 
   // Weighted sample of n events without replacement. Events in `avoid` (ids),
   // and other Gospels' tellings of the same stories, are skipped unless there
-  // aren't enough others.
-  function pickEvents(pool, stats, n, rng, avoid) {
+  // aren't enough others. `bias(e)`, if given, scales each event's weight.
+  function pickEvents(pool, stats, n, rng, avoid, bias) {
     const avoidSet = new Set(avoid || []);
     const avoided = pool.filter((e) => avoidSet.has(e.id));
     // Efraimidis–Spirakis: sort by u^(1/w) and take from the top.
     const keyed = pool
-      .map((e) => ({ e, k: Math.pow(rng(), 1 / weightFor(stats[e.id])) }))
+      .map((e) => ({ e, k: Math.pow(rng(), 1 / (weightFor(stats[e.id]) * (bias ? bias(e) : 1))) }))
       .sort((a, b) => b.k - a.k)
       .map((x) => x.e);
     const out = [];
@@ -361,9 +363,9 @@
     { min: 0.3, title: "Seeker", ref: "Matthew 7:7", note: "Seek, and you will find." },
     { min: 0, title: "Mustard seed", ref: "Matthew 13:31", note: "The smallest of seeds grows into a tree." },
   ];
-  function rankFor(correct, total) {
+  function rankFor(correct, total, ranks) {
     const ratio = total ? correct / total : 0;
-    return RANKS.find((r) => ratio >= r.min);
+    return (ranks || RANKS).find((r) => ratio >= r.min);
   }
 
   // ── Bible text ──

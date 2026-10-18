@@ -1,7 +1,7 @@
-// Bundles the game into one self-contained HTML file (CSS and scripts inlined)
+// Bundles the site (every part and game) into one self-contained HTML file (CSS and scripts inlined)
 // for hosts that serve a single page, such as a claude.ai artifact.
 //
-// Usage: node scripts/build.mjs   →   dist/chapter-and-verse.html
+// Usage: node scripts/build.mjs   →   dist/bible-learning.html
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 
 const root = new URL("../", import.meta.url);
@@ -20,5 +20,5 @@ html = html
   .replace(/<link rel="(manifest|icon|apple-touch-icon)"[^>]*>\s*/g, "");
 
 mkdirSync(new URL("dist/", root), { recursive: true });
-writeFileSync(new URL("dist/chapter-and-verse.html", root), html);
-console.error(`dist/chapter-and-verse.html (${(html.length / 1024).toFixed(0)} KB)`);
+writeFileSync(new URL("dist/bible-learning.html", root), html);
+console.error(`dist/bible-learning.html (${(html.length / 1024).toFixed(0)} KB)`);

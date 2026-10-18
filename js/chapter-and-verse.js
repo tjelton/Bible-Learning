@@ -1,8 +1,11 @@
-// Chapter & Verse — screens, input and saved progress.
+// Chapter & Verse — read a moment from the Gospels and name the chapter it comes
+// from. Screens, input and saved progress; the rules live in engine.js.
 (function () {
   "use strict";
 
   const E = window.Engine;
+  const Kit = window.Kit;
+  const { store, esc, fmt, plural, ICON } = Kit;
   const GOSPELS = window.GOSPELS;
   const TEXT = window.BIBLE_TEXT;
   const ROUND_LENGTH = 10;
@@ -10,24 +13,6 @@
   const BOOKS = E.BOOK_ORDER;
   const BOOK_ABBR = { Matthew: "Mt", Mark: "Mk", Luke: "Lk", John: "Jn" };
 
-  // ── Saved data (this device only) ──
-  // When the browser blocks storage (Safari with "Block All Cookies", some
-  // in-app browsers) saving fails; the home screen then says so.
-  const store = {
-    failed: false,
-    get(k, fallback) {
-      try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fallback; } catch (_) { return fallback; }
-    },
-    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) { store.failed = true; } },
-    remove(k) { try { localStorage.removeItem(k); } catch (_) { store.failed = true; } },
-  };
-  try {
-    localStorage.setItem("cv.check", "1");
-    if (localStorage.getItem("cv.check") !== "1") store.failed = true;
-    localStorage.removeItem("cv.check");
-  } catch (_) { store.failed = true; }
-  // Ask the browser to keep progress rather than clear it when space runs low.
-  try { navigator.storage.persist().catch(() => {}); } catch (_) { /* not supported */ }
   const DEFAULT_SETTINGS = { books: ["Matthew"], clues: "both", difficulty: "normal", timer: true, sound: true };
   let settings = Object.assign({}, DEFAULT_SETTINGS, store.get("cv.settings", {}));
   settings.books = (settings.books || []).filter((b) => GOSPELS[b]);
@@ -45,21 +30,10 @@
     mapBook: settings.books[0],
     study: { book: settings.books[0], ch: null, open: null },
   };
-  const app = document.getElementById("app");
+  let app = null; // the page element while this game is open
 
   // ── Helpers ──
-  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const fmt = (n) => n.toLocaleString("en-US");
   const same = (a, b) => a.book === b.book && a.ch === b.ch;
-  const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
-  const ICON = {
-    close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
-    back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>',
-    arrow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
-    book: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 6.5C10 5 7 4.5 4 5v13c3-.5 6 0 8 1.5 2-1.5 5-2 8-1.5V5c-3-.5-6 0-8 1.5zM12 6.5v13"/></svg>',
-    sprout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20v-8M12 12c0-3.5-2.5-6-7-6 0 3.5 2.5 6 7 6zM12 14c0-3.5 2.5-6 7-6 0 3.5-2.5 6-7 6z"/></svg>',
-    lamp: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5c.6 2.6 3.4 4.6 3.4 7.7a3.4 3.4 0 0 1-6.8 0c0-1.7.9-2.8 1.5-4 .6 1 .8 1.8.8 2.6 1-.9 1.4-3.6 1.1-6.3z"/><path d="M3 15.5h13.5c1.6 0 2.9-.7 3.9-1.8l.9.6c-.6 2.6-2.4 4.7-5.3 5.2H9.4C6 19.5 3.6 17.9 3 15.5z"/></svg>',
-  };
 
   function gospel(book) { return GOSPELS[book]; }
   function chapterEvents(book, ch) { return gospel(book).events.filter((e) => e.ch === ch).map((e) => byId[e.id]); }
@@ -78,72 +52,7 @@
   const shortRef = (k) => { const i = k.lastIndexOf(" "); return `${BOOK_ABBR[k.slice(0, i)]} ${k.slice(i + 1)}`; };
   function trainingStatus() { return E.trainingStatus(GOSPELS, settings.books, training.chapters, stats); }
 
-  // ── Sound (tiny synthesized tones; starts only after a tap) ──
-  let audio = null;
-  function play(kind) {
-    if (!settings.sound) return;
-    try {
-      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
-      if (audio.state === "suspended") audio.resume();
-      const notes = {
-        right: [[659.25, 0], [987.77, 0.09]],
-        wrong: [[220, 0], [174.61, 0.12]],
-        done: [[523.25, 0], [659.25, 0.1], [783.99, 0.2], [1046.5, 0.3]],
-      }[kind];
-      const t0 = audio.currentTime;
-      for (const [freq, at] of notes) {
-        const osc = audio.createOscillator();
-        const gain = audio.createGain();
-        osc.type = kind === "wrong" ? "sine" : "triangle";
-        osc.frequency.value = freq;
-        gain.gain.setValueAtTime(0.0001, t0 + at);
-        gain.gain.exponentialRampToValueAtTime(kind === "wrong" ? 0.12 : 0.09, t0 + at + 0.015);
-        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + at + 0.28);
-        osc.connect(gain).connect(audio.destination);
-        osc.start(t0 + at);
-        osc.stop(t0 + at + 0.3);
-      }
-    } catch (_) { /* no audio available */ }
-  }
-
-  // ── Confetti for a great round ──
-  function confetti() {
-    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const canvas = document.createElement("canvas");
-    canvas.className = "confetti";
-    document.body.appendChild(canvas);
-    const dpr = window.devicePixelRatio || 1;
-    const w = (canvas.width = innerWidth * dpr);
-    const h = (canvas.height = innerHeight * dpr);
-    const ctx = canvas.getContext("2d");
-    const css = getComputedStyle(document.documentElement);
-    const colors = ["--gold", "--accent", "--good", "--gold-soft"].map((v) => css.getPropertyValue(v).trim());
-    const parts = Array.from({ length: 140 }, () => ({
-      x: w / 2 + (Math.random() - 0.5) * w * 0.3,
-      y: h * 0.35,
-      vx: (Math.random() - 0.5) * 16 * dpr,
-      vy: (-Math.random() * 16 - 6) * dpr,
-      s: (4 + Math.random() * 5) * dpr,
-      r: Math.random() * Math.PI,
-      vr: (Math.random() - 0.5) * 0.3,
-      c: colors[Math.floor(Math.random() * colors.length)],
-    }));
-    const start = performance.now();
-    (function frame(now) {
-      const t = now - start;
-      ctx.clearRect(0, 0, w, h);
-      for (const p of parts) {
-        p.vy += 0.45 * dpr; p.vx *= 0.99; p.x += p.vx; p.y += p.vy; p.r += p.vr;
-        ctx.save();
-        ctx.globalAlpha = Math.max(0, 1 - t / 2200);
-        ctx.translate(p.x, p.y); ctx.rotate(p.r);
-        ctx.fillStyle = p.c;
-        ctx.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2);
-        ctx.restore();
-      }
-      if (t < 2200) requestAnimationFrame(frame); else canvas.remove();
-    })(start);
-  }
+  const play = (kind) => Kit.sound(kind, settings.sound);
 
   // ── Game flow ──
   function pool() { return E.eventPool(GOSPELS, settings.books); }
@@ -266,8 +175,8 @@
     }
     play(q.learned ? "done" : ok ? "right" : "wrong");
     render({ animate: ok ? "pop" : "shake", index });
-    if (ok && g.mode === "round") floatPoints(q.points.total);
-    if (q.learned) confetti();
+    if (ok && g.mode === "round") Kit.floatPoints(q.points.total);
+    if (q.learned) Kit.confetti();
   }
 
   function useHint() {
@@ -288,20 +197,12 @@
     state.screen = "results";
     render();
     const right = g.history.filter((h) => h.ok).length;
-    if (g.newBest || (g.mode === "round" && right === ROUND_LENGTH)) { play("done"); confetti(); }
-  }
-
-  function floatPoints(n) {
-    const el = document.createElement("div");
-    el.className = "points";
-    el.textContent = "+" + n;
-    el.setAttribute("aria-hidden", "true");
-    document.body.appendChild(el);
-    setTimeout(() => el.remove(), 1000);
+    if (g.newBest || (g.mode === "round" && right === ROUND_LENGTH)) { play("done"); Kit.confetti(); }
   }
 
   // ── Screens ──
   function render(opts) {
+    if (!app) return;
     opts = opts || {};
     app.className = "app" + (state.screen === "play" ? " is-play" : "");
     const html = { home: homeHtml, play: playHtml, results: resultsHtml, study: studyHtml }[state.screen]();
@@ -367,13 +268,14 @@
     if (bests.run) bestBits.push(`Longest run <b class="tabular">${bests.run}</b>`);
 
     return `
+      ${Kit.crumb("#/gospels", "The Gospels")}
       <header class="masthead">
         <p class="eyebrow">A Gospel game</p>
         <h1>Chapter <span class="amp">&amp;</span> Verse</h1>
         <p class="lede">Read a moment from the Gospels. Name the chapter it comes from.</p>
       </header>
 
-      ${store.failed ? `<p class="save-warning" role="alert"><b>Progress isn’t being saved.</b> This browser is blocking storage, so everything resets when the page closes. On iPhone, check that Settings → Apps → Safari → Block All Cookies is off, and that you aren’t in a Private tab.</p>` : ""}
+      ${Kit.saveWarning()}
       <section class="play-buttons" aria-label="Play">
         <button type="button" class="btn btn-primary mode-btn" data-action="start" data-mode="round">
           <span class="mode-text"><span class="mode-name">Play a round</span><span class="mode-desc">10 questions · bonus points for speed and streaks</span></span>${ICON.arrow}
@@ -430,14 +332,14 @@
           <button type="button" class="switch" role="switch" aria-checked="${settings.sound}" aria-label="Sound" data-action="toggle" data-key="sound"></button>
         </div>
         <button type="button" class="btn btn-small btn-ghost danger" data-action="reset">${state.resetArmed ? "Tap again to erase all progress" : "Reset progress"}</button>
-        <p class="footer-note">Scripture text is the World English Bible, which is in the public domain. Progress is saved in this browser on this device only. On iPhone, tap Share → Add to Home Screen to play it like an app (the Home Screen app keeps its own progress, separate from Safari’s).</p>
+        <p class="footer-note">Scripture text is the World English Bible, which is in the public domain. Progress is saved in this browser on this device only.</p>
       </section>`;
   }
 
   function topbarHtml(g, status) {
     return `
       <div class="topbar">
-        <button type="button" class="icon-btn" data-action="quit" aria-label="Quit to home">${ICON.close}</button>
+        <button type="button" class="icon-btn" data-action="quit" aria-label="Quit to menu">${ICON.close}</button>
         ${status}
         <span class="score tabular" aria-label="${g.mode === "train" ? "Right answers" : "Score"}">${fmt(g.score)}</span>
       </div>`;
@@ -493,20 +395,7 @@
     const answered = q.picked !== null;
     const ok = answered && q.picked >= 0 && isRight(q, q.choices[q.picked]);
 
-    let status;
-    if (g.mode === "train") {
-      status = trainingSetHtml();
-    } else if (g.mode === "round") {
-      const pips = Array.from({ length: ROUND_LENGTH }, (_, i) => {
-        const h = g.history[i];
-        const cls = h ? (h.ok ? "is-right" : "is-wrong") : i === g.history.length ? "is-now" : "";
-        return `<span class="pip ${cls}"></span>`;
-      }).join("");
-      status = `<div class="pips" aria-label="Question ${Math.min(g.history.length + (answered ? 0 : 1), ROUND_LENGTH)} of ${ROUND_LENGTH}">${pips}</div>`;
-    } else {
-      const lamps = Array.from({ length: LAMPS }, (_, i) => ICON.lamp.replace("<svg", `<svg class="lamp${i >= g.lamps ? " is-out" : ""}"`)).join("");
-      status = `<div class="lamps" aria-label="${plural(g.lamps, "lamp")} left">${lamps}<span class="run">Run <b class="tabular">${g.streak}</b></span></div>`;
-    }
+    const status = g.mode === "train" ? trainingSetHtml() : Kit.roundStatus(g, answered, ROUND_LENGTH, LAMPS);
 
     const clue = q.type === "chapter"
       ? `<h2 class="chapter-ask">${esc(e.book)} ${e.ch}</h2>`
@@ -563,7 +452,7 @@
     const range = sec ? (sec.from === sec.to ? `ch. ${sec.from}` : `ch. ${sec.from}–${sec.to}`) : "";
     const picked = q.picked >= 0 ? q.choices[q.picked] : null;
     const verdict = ok
-      ? `Right!${q.points && q.points.total ? ` +${q.points.total}` : ""}${q.points && q.points.speed ? ` (speed +${q.points.speed}${q.points.streak ? `, streak +${q.points.streak}` : ""})` : q.points && q.points.streak ? ` (streak +${q.points.streak})` : ""}`
+      ? `Right!${Kit.pointsNote(q.points)}`
       : !picked ? "Here’s the answer."
         : q.type === "chapter" ? `Not quite. “${picked.title}” is in ${picked.book} ${picked.ch}.`
           : `Not quite. You picked ${picked.book} ${picked.ch}.`;
@@ -612,7 +501,7 @@
       </header>
       <div class="button-row">
         <button type="button" class="btn btn-primary" data-action="start" data-mode="${g.mode}">Play again</button>
-        <button type="button" class="btn" data-action="home">Home</button>
+        <button type="button" class="btn" data-action="home">Menu</button>
       </div>
       <section style="display:grid;gap:8px" aria-labelledby="review-title">
         <div class="section-head"><h2 id="review-title">Review</h2><span class="note">Tap any event to read it</span></div>
@@ -676,26 +565,16 @@
 
   function sheetHtml() {
     const e = byId[state.sheet];
-    const verses = E.passage(TEXT, e)
-      .map((v) => `<span${v.n === e.key ? ' class="is-key"' : ""}><sup>${v.n}</sup>${esc(v.text)}</span>`)
-      .join(" ");
-    return `
-      <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
-        <div class="sheet-head">
-          <div><p class="eyebrow">${esc(e.title)}</p><h2 class="ref" id="sheet-title">${esc(E.formatRef(e))}</h2></div>
-          <button type="button" class="icon-btn" data-action="close-sheet" aria-label="Close">${ICON.close}</button>
-        </div>
-        <div class="sheet-body">
-          <p class="passage">${verses}</p>
-          <p class="attribution">World English Bible (public domain). The highlighted verse is the one used for verse clues.</p>
-        </div>
-      </div>`;
+    return Kit.sheetHtml({
+      eyebrow: e.title,
+      title: E.formatRef(e),
+      passages: [{ verses: E.passage(TEXT, e), key: e.key }],
+      attribution: "World English Bible (public domain). The highlighted verse is the one used for verse clues.",
+    });
   }
 
-  // ── Input ──
-  app.addEventListener("click", (ev) => {
-    const el = ev.target.closest("[data-action]");
-    if (!el || el.disabled) return;
+  // ── Input (the shell forwards clicks on [data-action] and key presses) ──
+  function click(el) {
     const a = el.dataset.action;
     if (a !== "reset") state.resetArmed = false;
     switch (a) {
@@ -742,9 +621,9 @@
         }
         break;
     }
-  });
+  }
 
-  document.addEventListener("keydown", (ev) => {
+  function key(ev) {
     if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
     if (state.sheet) { if (ev.key === "Escape") { state.sheet = null; render(); } return; }
     if (state.screen !== "play") return;
@@ -758,21 +637,38 @@
     else if (q.picked === null && ev.key.toLowerCase() === "h") useHint();
     else if (q.picked !== null && ev.key === "Enter" && !(ev.target instanceof HTMLButtonElement && ev.target.dataset.action !== "next")) { nextQuestion(); ev.preventDefault(); }
     else if (ev.key === "Escape") { state.game = null; state.screen = "home"; render(); }
-  });
+  }
 
-  // ── Start (keeps an in-progress game when the page is updated live) ──
-  function boot(data) {
-    if (data && data.state && data.state.screen) {
-      state = Object.assign(state, data.state);
+  function masteredCount() {
+    return Object.keys(byId).filter((id) => E.isMastered(stats[id])).length;
+  }
+
+  window.Games = window.Games || {};
+  window.Games["chapter-and-verse"] = {
+    title: "Chapter & Verse",
+    blurb: "Read a moment from the Gospels. Name the chapter it comes from.",
+    art: '<span class="art-amp">&amp;</span>',
+    summary() {
+      const bits = [`${masteredCount()} of ${Object.keys(byId).length} events mastered`];
+      if (training.chapters.length) bits.push(`${trainingStatus().learned.length} chapters learned in training`);
+      if (bests.round) bits.push(`best round ${fmt(bests.round)}`);
+      return bits.join(" · ");
+    },
+    mount(root) { app = root; render({ scrollTop: true }); },
+    // Leaving abandons a game in progress; the menu is there on return.
+    // (Training progress is saved as it goes.)
+    unmount() {
+      app = null;
+      Object.assign(state, { screen: "home", game: null, sheet: null, resetArmed: false });
+    },
+    click, key,
+    // Keeps an in-progress game when the page is updated live.
+    snapshot: () => JSON.parse(JSON.stringify(state)),
+    restore(saved) {
+      if (!saved || !saved.screen) return;
+      state = Object.assign(state, saved);
       if (state.game && state.game.q) state.game.q.startedAt = Date.now();
       if (state.screen !== "home" && state.screen !== "study" && !state.game) state.screen = "home";
-    }
-    render();
-  }
-  const hot = window.claude && window.claude.hot;
-  try {
-    if (hot && typeof hot.snapshot === "function") hot.snapshot(() => ({ state: JSON.parse(JSON.stringify(state)) }));
-  } catch (_) { /* live updates not available */ }
-  if (hot && typeof hot.ready === "function") hot.ready(boot);
-  else boot((hot && hot.data) || {});
+    },
+  };
 })();

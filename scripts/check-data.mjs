@@ -66,6 +66,51 @@ for (const g of Object.values(GOSPELS)) {
   console.error(`${g.book}: ${g.events.length} events across ${covered.size}/${g.chapters} chapters`);
 }
 
+// ── Which Gospel? ──
+// Every passage must exist and contain the item's `find` phrase; with
+// `exclusive`, the phrase must appear nowhere in the Gospels left out. A
+// saying's title must be the passage's own words.
+vm.runInContext(readFileSync(new URL("which-gospel.js", root), "utf8"), ctx, { filename: "which-gospel.js" });
+const ITEMS = ctx.window.WHICH_GOSPEL;
+const KINDS = ["event", "detail", "teaching", "saying"];
+const phrase = (p) => new RegExp(`(?<![\\p{L}\\p{N}])${p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\p{L}\\p{N}])`, "iu");
+const words = (s) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+const bookText = (book) => Object.values(BIBLE_TEXT[book]).flat().join(" ");
+const patterns = {};
+for (const it of ITEMS) {
+  const where = `which-gospel ${it.id}`;
+  if (ids.has(it.id)) errors.push(`${where}: duplicate id`);
+  ids.add(it.id);
+  for (const k of ["id", "title", "clue", "find"]) if (!it[k]) errors.push(`${where}: missing ${k}`);
+  if (!KINDS.includes(it.kind)) errors.push(`${where}: kind must be one of ${KINDS.join(", ")}`);
+  if (/['"]/.test(it.title + it.clue + (it.note || ""))) errors.push(`${where}: use curly quotes and apostrophes`);
+  const finds = [].concat(it.find || []).map(phrase);
+  const passages = [];
+  for (const r of it.refs || []) {
+    const m = /^(Matthew|Mark|Luke|John) (\d+):(\d+)(?:-(\d+))?$/.exec(r);
+    const verses = m && BIBLE_TEXT[m[1]][m[2]];
+    const [a, b] = m ? [+m[3], +(m[4] || m[3])] : [];
+    if (!verses || !(a >= 1 && b >= a && b <= verses.length)) { errors.push(`${where}: bad reference "${r}"`); continue; }
+    const text = verses.slice(a - 1, b).join(" ");
+    passages.push({ book: m[1], text });
+    if (!finds.some((re) => re.test(text))) errors.push(`${where}: "${[].concat(it.find).join(" / ")}" not found in ${r}`);
+  }
+  if (!passages.length) { errors.push(`${where}: no references`); continue; }
+  const books = new Set(passages.map((p) => p.book));
+  if (it.exclusive) {
+    for (const book of Object.keys(CHAPTER_COUNTS)) {
+      if (!books.has(book) && finds.some((re) => re.test(bookText(book)))) errors.push(`${where}: marked exclusive, but "${[].concat(it.find).join(" / ")}" also appears in ${book}`);
+    }
+  }
+  if (it.kind === "saying" && !passages.some((p) => words(p.text).includes(words(it.title)))) {
+    errors.push(`${where}: a saying's title must be quoted from one of its passages`);
+  }
+  const pattern = [...books].join(" + ");
+  patterns[pattern] = (patterns[pattern] || 0) + 1;
+}
+console.error(`Which Gospel?: ${ITEMS.length} questions`);
+for (const [p, n] of Object.entries(patterns).sort((x, y) => y[1] - x[1])) console.error(`  ${String(n).padStart(3)}  ${p}`);
+
 if (errors.length) {
   console.error(errors.join("\n"));
   process.exit(1);
