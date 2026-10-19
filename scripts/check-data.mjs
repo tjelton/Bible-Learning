@@ -1,9 +1,13 @@
-// Validates the event data against the Bible text and prints each passage's
-// boundaries so references can be proof-read by eye.
+// Validates the game data against the Bible text and prints each Chapter &
+// Verse passage's boundaries so references can be proof-read by eye.
 //
 // Usage: node scripts/check-data.mjs [--print [Book]]
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const Engine = require("../js/engine.js");
 
 const root = new URL("../js/data/", import.meta.url);
 const ctx = { window: {} };
@@ -110,6 +114,48 @@ for (const it of ITEMS) {
 }
 console.error(`Which Gospel?: ${ITEMS.length} questions`);
 for (const [p, n] of Object.entries(patterns).sort((x, y) => y[1] - x[1])) console.error(`  ${String(n).padStart(3)}  ${p}`);
+
+// ── Clusters ──
+// Every passage must be downloaded and contain the word (or its `find`
+// phrase); a book group's words must be book names; and every group must be
+// able to appear in some puzzle.
+vm.runInContext(readFileSync(new URL("clusters.js", root), "utf8"), ctx, { filename: "clusters.js" });
+vm.runInContext(readFileSync(new URL("clusters-text.js", root), "utf8"), ctx, { filename: "clusters-text.js" });
+const { CLUSTERS, CLUSTERS_TEXT } = ctx.window;
+const CL = require("../js/clusters-engine.js");
+const clGroups = CL.prepare(CLUSTERS);
+for (const g of CLUSTERS) {
+  const where = `clusters ${g.id}`;
+  if (ids.has(g.id)) errors.push(`${where}: duplicate id`);
+  ids.add(g.id);
+  for (const k of ["id", "title", "note"]) if (!g[k]) errors.push(`${where}: missing ${k}`);
+  if (!CL.LEVELS.includes(g.level)) errors.push(`${where}: level must be 1–4`);
+  if (/['"]/.test(g.title + g.note + g.items.map((it) => it[0]).join("") + (g.fits || []).join(""))) errors.push(`${where}: use curly quotes and apostrophes`);
+  if (g.items.length < 4) errors.push(`${where}: needs at least four items`);
+  const words = g.items.map((it) => it[0].toLowerCase());
+  if (new Set(words).size !== words.length) errors.push(`${where}: an item is listed twice`);
+  for (const f of g.fits || []) if (words.includes(f.toLowerCase())) errors.push(`${where}: "${f}" is in both items and fits`);
+  for (const [word, ref, find] of g.items) {
+    const verses = CLUSTERS_TEXT[ref];
+    if (!verses) { errors.push(`${where}: no text for "${ref}" (run scripts/fetch-clusters-text.mjs)`); continue; }
+    if (g.books) {
+      if (ref !== `${word} 1:1`) errors.push(`${where}: a book's reference must be its first verse ("${word} 1:1")`);
+    } else if (!phrase(find || word).test(verses.join(" "))) {
+      errors.push(`${where}: "${find || word}" not found in ${ref}`);
+    }
+  }
+}
+// A group no puzzle can include would never be seen: try each one as the seed.
+const clRng = Engine.seededRng(7);
+for (const g of clGroups) {
+  let ok = false;
+  for (let i = 0; i < 200 && !ok; i++) {
+    const p = CL.buildPuzzle(clGroups, clRng, { seen: Object.fromEntries(clGroups.filter((o) => o.level === g.level && o !== g).map((o) => [o.id, 1e9])) });
+    ok = !!p && p.groups.some((pg) => pg.id === g.id);
+  }
+  if (!ok) errors.push(`clusters ${g.id}: never fits in a puzzle with groups from the other levels`);
+}
+console.error(`Clusters: ${CLUSTERS.length} groups (${CL.LEVELS.map((lv) => CLUSTERS.filter((g) => g.level === lv).length).join(" / ")} by level)`);
 
 if (errors.length) {
   console.error(errors.join("\n"));

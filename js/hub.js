@@ -11,9 +11,12 @@
   const GAMES = window.Games || {};
   const NAME = "Bible Learning";
 
-  // Parts of the Bible that can be studied, in Bible order. Add a part here
-  // with its games to offer it on the first screen.
+  // Parts of the Bible that can be studied: the whole Bible, then its parts in
+  // Bible order. Add a part here with its games to offer it on the first screen.
   const PARTS = [
+    { id: "bible", testament: "Old and New Testaments", name: "The Whole Bible", books: "Genesis to Revelation",
+      lede: "Games that range across all sixty-six books.",
+      games: ["clusters"] },
     { id: "gospels", testament: "New Testament", name: "The Gospels", books: "Matthew, Mark, Luke and John",
       lede: "Four accounts of the life of Jesus. Pick a game.",
       games: ["chapter-and-verse", "which-gospel"] },

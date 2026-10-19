@@ -3,14 +3,47 @@
 # Bible Learning
 
 Quick-fire phone games for learning the Bible. You start by choosing which part of the
-Bible to study, and each part has its own page of games. The Gospels are the first
-part; others can be added later.
+Bible to study, and each part has its own page of games: the Whole Bible and the
+Gospels so far; others can be added later.
+
+The Whole Bible has one game:
+
+- **Clusters**: group sixteen words from across the Bible into four clusters of four.
 
 The Gospels have two games:
 
 - **Chapter & Verse**: read a moment from a Gospel and name the chapter it comes from,
   or learn the chapters a few at a time in Training.
 - **Which Gospel?**: read a story, saying or detail, and tick every Gospel that tells it.
+
+## Clusters
+
+Sixteen words appear in a grid: people, places, books, objects and phrases from Genesis
+to Revelation. Tap four that share something and submit. Find all four groups before
+your four lamps go out. A guess with three of a group's four words says so.
+
+There's no daily limit: **New puzzle** always builds a fresh one. Each puzzle takes one
+group from each of four levels, shown by colour:
+
+| Level           | Groups | For example                                 |
+| --------------- | ------ | ------------------------------------------- |
+| Straightforward | 16     | Sons of Jacob, Plagues of Egypt             |
+| Steady          | 20     | The seven churches of Revelation, Queens    |
+| Tricky          | 18     | Words left untranslated, Stoned to death    |
+| Devious         | 18     | ___ of God, Lived more than 900 years       |
+
+Most groups have more words than a puzzle needs, so the same group comes back with
+different words. New puzzles favour groups you haven't seen and hold back the 24 you saw
+most recently.
+
+- Every answer has exactly one right group. A word that would also fit another group in
+  the same puzzle is never shown, so red herrings tempt but never trick. Groups whose
+  stories overlap too much (Moses' life and the plagues) never meet.
+- Tap a found group to read the verse behind each word, with the word highlighted.
+- **Your groups** collects every group you've found, with all its words and verses.
+- The home screen counts puzzles solved, perfect solves and your streak, and saves a
+  puzzle in progress so you can come back to it. Starting a new one instead ends the
+  streak.
 
 ## Chapter & Verse
 
@@ -80,9 +113,9 @@ single-Gospel questions.
 - **Browse the answers** lists every question grouped by its answer, such as "Only
   John" or "Matthew and Luke". Tap one to read all its passages one after another.
 
-## Both games
+## Chapter & Verse and Which Gospel?
 
-The games learn what you find hard. Questions you miss come up more often, and one
+The two Gospel games learn what you find hard. Questions you miss come up more often, and one
 counts as **mastered** once you get it right twice in a row. Each game keeps its own
 progress, settings and best scores, saved in the browser on that device. The Gospels
 page shows how far you've got in each. If the browser blocks storage (Safari with
@@ -99,8 +132,8 @@ python3 -m http.server 8000
 ```
 
 Each screen has its own address, so the back button works and you can link straight to a
-game: `#/` (choose a part), `#/gospels`, `#/gospels/chapter-and-verse`,
-`#/gospels/which-gospel`.
+game: `#/` (choose a part), `#/bible`, `#/bible/clusters`, `#/gospels`,
+`#/gospels/chapter-and-verse`, `#/gospels/which-gospel`.
 
 To play on an iPhone, host the folder anywhere that serves static files (GitHub Pages,
 Netlify, Cloudflare Pages…), open it in Safari, then tap **Share → Add to Home Screen**.
@@ -113,6 +146,9 @@ for hosts that take a single page.
 
 - Scripture text is the **World English Bible** (public domain), downloaded verbatim by
   `scripts/fetch-text.mjs` from bible-api.com and stored in `js/data/text-<book>.js`.
+  Clusters stores only the verses it cites, in `js/data/clusters-text.js`,
+  downloaded by `scripts/fetch-clusters-text.mjs` (whole chapters are cached in
+  `.cache/`, which isn't committed).
 - `node scripts/check-data.mjs` checks all the data:
   - Chapter & Verse events: verse ranges exist, the key verse is inside the passage,
     parallel references are valid, and every chapter has events. `--print [Book]` shows
@@ -122,6 +158,10 @@ for hosts that take a single page.
     questions marked `exclusive`, the phrase must appear nowhere in the Gospels left
     out, which proves the answer is complete. That covers 94 of the 152 questions. The
     rest were checked by hand against a Gospel synopsis.
+  - Clusters groups: every word's passage contains the word itself (or its
+    `find` phrase), each book group's words are books, and every group can appear in
+    some puzzle. Whether each word really belongs, and whether any word could also
+    fit another group, was checked by hand.
 - Clues are paraphrases written to match the text, using the same wording as this
   translation (e.g. "Zacharias").
 - Chapter & Verse's parallels (`par`) follow the usual synopsis pairings at chapter level.
@@ -143,6 +183,13 @@ node --test
 - the 50/50, question weighting, mastery, scoring and verse formatting
 - training: which chapters join and when, and that its answer choices stay within those
   chapters and never offer something that also happens in the asked chapter
+
+`tests/clusters.test.mjs` covers Clusters:
+
+- every puzzle has one group per level and sixteen different words
+- every word belongs to exactly one of its puzzle's groups, and families never meet
+- unseen groups come first, and recent ones are held back
+- checking guesses (including three of one group), and the ranks quoting the text
 
 `tests/which-gospel.test.mjs` covers Which Gospel?:
 
@@ -173,7 +220,23 @@ node --test
 - optionally a `note`
 - optionally a `group`, shared by questions that would give each other away
 
-After editing either, run `node scripts/check-data.mjs` and `node --test`.
+**Clusters groups** live in `js/data/clusters.js`. Each has:
+
+- a stable `id`
+- a `level` from 1 to 4
+- a `title` and a `note`
+- `items`: each word with a reference that shows it belongs, and an optional `find`
+  phrase when the passage doesn't use the word itself
+- `fits`: other words that would also belong. List every word used elsewhere in the
+  file that a player could fairly put in this group; the puzzle builder relies on it to
+  keep answers unambiguous
+- optionally a `family`, shared by groups that should never meet
+- `books: true` for groups of books, whose references are each book's first verse
+
+After adding references, run `node scripts/fetch-clusters-text.mjs` to download their
+verses.
+
+After editing any of these, run `node scripts/check-data.mjs` and `node --test`.
 
 **A new game** is a script that registers itself on `window.Games` (see the end of
 `js/which-gospel.js`). Add its id to that part's `games` list in `js/hub.js`, and its
@@ -191,9 +254,13 @@ js/engine.js                Chapter & Verse rules: choices, weighting, scoring, 
 js/chapter-and-verse.js     Chapter & Verse screens and input
 js/which-gospel-engine.js   Which Gospel? rules: answers, grading, hints (no DOM)
 js/which-gospel.js          Which Gospel? screens and input
+js/clusters-engine.js       Clusters rules: building puzzles, checking guesses (no DOM)
+js/clusters.js              Clusters screens and input
 js/data/<book>.js           each Gospel's events and outline
 js/data/text-<book>.js      each Gospel's full text (WEB)
 js/data/which-gospel.js     Which Gospel? questions
+js/data/clusters.js         Clusters groups
+js/data/clusters-text.js    the verses Clusters cites (WEB)
 scripts/                    fetch text, check data, build single file
 tests/                      node:test unit tests
 ```
