@@ -3,7 +3,7 @@
 //
 // Each group:
 //   id      unique, stable (progress is stored against it)
-//   level   1 (straightforward) to 4 (devious); a puzzle has one of each
+//   level   1 (straightforward) to 4 (tricky); a puzzle has one of each
 //   title   what the four words share, shown once the group is found
 //   note    a sentence or two explaining the link
 //   items   [word, reference] or [word, reference, find]: a word that can go in
@@ -238,7 +238,7 @@ window.CLUSTERS = [
     items: [["Jasper", "Revelation 21:19-20"], ["Sapphire", "Revelation 21:19-20"], ["Emerald", "Revelation 21:19-20"], ["Chrysolite", "Revelation 21:19-20"], ["Beryl", "Revelation 21:19-20"], ["Topaz", "Revelation 21:19-20"], ["Amethyst", "Revelation 21:19-20"]],
     fits: ["Chalcedony", "Sardonyx", "Sardius", "Chrysoprase", "Chrysoprasus", "Jacinth", "Pearl", "Pearls", "Gold"] },
 
-  // ── Level 4: devious ──
+  // ── Level 4: tricky ──
   { id: "cl-from-sky", level: 4, title: "Came down from the sky",
     note: "Things the Bible describes coming down out of the sky.",
     items: [["Sulfur", "Genesis 19:24"], ["Manna", "Exodus 16:4", "from the sky"], ["Stones", "Joshua 10:11"], ["Fire", "2 Kings 1:10"], ["Sheet", "Acts 10:11"]],

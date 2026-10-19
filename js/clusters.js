@@ -217,7 +217,7 @@
           <span class="note tabular">${foundCount(GROUPS)} of ${GROUPS.length}</span>
         </div>
         <div class="bars">${bars}</div>
-        <p class="option-help">Each puzzle has one group of each colour, from straightforward to devious. New puzzles favour groups you haven’t seen.</p>
+        <p class="option-help">Each puzzle has one group of each colour, from straightforward to tricky. New puzzles favour groups you haven’t seen.</p>
       </section>
 
       <section class="options" aria-labelledby="how-title">

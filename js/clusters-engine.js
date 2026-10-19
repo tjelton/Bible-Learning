@@ -5,7 +5,7 @@
   "use strict";
 
   const LEVELS = [1, 2, 3, 4];
-  const LEVEL_NAMES = { 1: "Straightforward", 2: "Steady", 3: "Tricky", 4: "Devious" };
+  const LEVEL_NAMES = { 1: "Straightforward", 2: "Steady", 3: "Challenging", 4: "Tricky" };
   const MISTAKES = 4; // a puzzle ends after this many wrong guesses
   const RECENT = 24; // this many most recently shown groups are held back
   const norm = (s) => s.toLowerCase();

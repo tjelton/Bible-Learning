@@ -29,8 +29,8 @@ group from each of four levels, shown by colour:
 | --------------- | ------ | ------------------------------------------- |
 | Straightforward | 16     | Sons of Jacob, Plagues of Egypt             |
 | Steady          | 20     | The seven churches of Revelation, Queens    |
-| Tricky          | 18     | Words left untranslated, Stoned to death    |
-| Devious         | 18     | ___ of God, Lived more than 900 years       |
+| Challenging     | 18     | Words left untranslated, Stoned to death    |
+| Tricky          | 18     | ___ of God, Lived more than 900 years       |
 
 Most groups have more words than a puzzle needs, so the same group comes back with
 different words. New puzzles favour groups you haven't seen and hold back the 24 you saw
