@@ -556,9 +556,9 @@
     const picked = q.picked >= 0 ? q.choices[q.picked] : null;
     const verdict = ok
       ? `Right!${Kit.pointsNote(q.points)}`
-      : !picked ? "Here’s the answer."
-        : q.type === "chapter" ? `Not quite. “${picked.title}” is in ${picked.book} ${picked.ch}.`
-          : `Not quite. You picked ${picked.book} ${picked.ch}.`;
+      : q.type === "chapter"
+        ? (picked ? `Not quite. “${picked.title}” is in ${picked.book} ${picked.ch}. ` : "") + `${e.book} ${e.ch} has “${e.title}”.`
+        : picked ? `Not quite. It’s in ${e.book} ${e.ch}, not ${picked.book} ${picked.ch}.` : `It’s in ${e.book} ${e.ch}.`;
     const chapter = `${e.book} ${e.ch}`;
     const review = training.review[chapter];
     const learned = q.learned
