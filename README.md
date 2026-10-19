@@ -67,14 +67,22 @@ than one on, you pick the Gospel as well as the chapter.
   (up to +50). The 50/50 removes two wrong answers but halves the points.
 - **Three lamps**: keep answering until you've missed three. The lamps come from the
   parable of the ten virgins (Matthew 25).
-- **Training**: a learning mode that starts with three chapters and adds the next one
-  each time you learn one (every event in it right twice in a row). Each new chapter is
-  introduced with a list of what happens in it before the questions start. Questions
-  switch between styles: given the chapter, pick what happens there; given the event,
-  pick the chapter; and, once you've got an event right, given a verse, pick the chapter.
-  Answers only come from chapters you're training on, chapters still being learned come
-  up four times as often as learned ones, and **Show me** reveals the answer instead of
-  guessing. With several Gospels on, it moves through them together.
+- **Training**: a learning mode. It starts by asking what to train on: switch on the
+  Gospels you want, and for each one choose the whole book or tap just the chapters
+  you're studying (Matthew 1–7, say). It starts with the first three chapters and adds
+  the next one each time you learn one (every event in it right twice in a row). Each
+  new chapter is introduced with a list of what happens in it before the questions
+  start. Questions switch between styles: given the chapter, pick what happens there;
+  given the event, pick the chapter; and, once you've got an event right, given a verse,
+  pick the chapter. Answers only come from chapters you're training on, and **Show me**
+  reveals the answer instead of guessing. With several Gospels on, it moves through
+  them together.
+
+  Learned chapters come back for **review**, marked as such, on a schedule that spreads
+  out each time you get them right: 10 minutes, an hour, a day, 3 days, a week, 2 weeks,
+  then 1, 2 and 4 months. While any are due, about half the questions are reviews,
+  most overdue first. Miss one and that chapter goes back with the ones you're learning
+  until you've learned it again, and its reviews restart half as far along the schedule.
 - **Study the chapters**: each Gospel's outline, with every event and the full passage
   text. The outline notes highlight each book's shape: Matthew's five teaching blocks,
   Mark's turn at Peter's confession, Luke's journey to Jerusalem, and John's signs and
@@ -181,8 +189,9 @@ node --test
   parallel account offered as a wrong answer, and a mix of books that never gives the
   answer away
 - the 50/50, question weighting, mastery, scoring and verse formatting
-- training: which chapters join and when, and that its answer choices stay within those
-  chapters and never offer something that also happens in the asked chapter
+- training: the chapters you choose, which chapters join and when, that its answer
+  choices stay within those chapters and never offer something that also happens in the
+  asked chapter, and the review schedule
 
 `tests/clusters.test.mjs` covers Clusters:
 

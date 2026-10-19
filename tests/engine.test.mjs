@@ -230,57 +230,137 @@ const masterAll = (stats, events) => {
 };
 const eventsIn = (k) => allPool.filter((e) => `${e.book} ${e.ch}` === k);
 
+const scopeOf = (books, only) => Engine.trainingScope(GOSPELS, books, only);
+const MT = scopeOf(["Matthew"]);
+
+test("the training scope is whole books, or only the chapters chosen", () => {
+  assert.equal(MT.length, 28);
+  assert.deepEqual(scopeOf(["Mark", "Matthew"], { Matthew: [7, 1, 2] }).slice(0, 4), ["Matthew 1", "Matthew 2", "Matthew 7", "Mark 1"]);
+  assert.equal(scopeOf(["Mark", "Matthew"], { Matthew: [7, 1, 2] }).length, 3 + 16);
+  assert.deepEqual(scopeOf(["Matthew"], { Matthew: [] }), []);
+});
+
 test("training starts with three chapters, in order", () => {
-  const r = Engine.trainingTopUp(GOSPELS, ["Matthew"], [], {});
+  const r = Engine.trainingTopUp(GOSPELS, MT, [], {});
   assert.deepEqual(r.introduced, ["Matthew 1", "Matthew 2", "Matthew 3"]);
   assert.deepEqual(r.added, r.introduced);
-  assert.deepEqual(Engine.trainingTopUp(GOSPELS, ["Matthew"], r.introduced, {}).added, []);
+  assert.deepEqual(Engine.trainingTopUp(GOSPELS, MT, r.introduced, {}).added, []);
 });
 
 test("training adds the next chapter once one is learned", () => {
   const start = ["Matthew 1", "Matthew 2", "Matthew 3"];
   let stats = masterAll({}, eventsIn("Matthew 2").slice(0, -1));
   assert.equal(Engine.chapterLearned(GOSPELS, "Matthew 2", stats), false);
-  assert.deepEqual(Engine.trainingTopUp(GOSPELS, ["Matthew"], start, stats).added, []);
+  assert.deepEqual(Engine.trainingTopUp(GOSPELS, MT, start, stats).added, []);
   stats = masterAll(stats, eventsIn("Matthew 2"));
   assert.equal(Engine.chapterLearned(GOSPELS, "Matthew 2", stats), true);
-  assert.deepEqual(Engine.trainingTopUp(GOSPELS, ["Matthew"], start, stats).added, ["Matthew 4"]);
+  assert.deepEqual(Engine.trainingTopUp(GOSPELS, MT, start, stats).added, ["Matthew 4"]);
   // A miss on a learned chapter puts it back into learning; nothing new is added.
   const missed = Engine.recordAnswer(stats, eventsIn("Matthew 2")[0].id, false);
   assert.equal(Engine.chapterLearned(GOSPELS, "Matthew 2", missed), false);
-  assert.deepEqual(Engine.trainingTopUp(GOSPELS, ["Matthew"], start, missed).added, []);
+  assert.deepEqual(Engine.trainingTopUp(GOSPELS, MT, start, missed).added, []);
 });
 
 test("training skips past chapters already learned elsewhere", () => {
   const stats = masterAll({}, eventsIn("Matthew 1").concat(eventsIn("Matthew 2")));
-  const r = Engine.trainingTopUp(GOSPELS, ["Matthew"], [], stats);
+  const r = Engine.trainingTopUp(GOSPELS, MT, [], stats);
   assert.deepEqual(r.introduced, ["Matthew 1", "Matthew 2", "Matthew 3", "Matthew 4", "Matthew 5"]);
-  assert.deepEqual(Engine.trainingStatus(GOSPELS, ["Matthew"], r.introduced, stats).learning, ["Matthew 3", "Matthew 4", "Matthew 5"]);
+  assert.deepEqual(Engine.trainingStatus(GOSPELS, MT, r.introduced, stats).learning, ["Matthew 3", "Matthew 4", "Matthew 5"]);
 });
 
 test("with several Gospels on, training moves through them together", () => {
-  const r = Engine.trainingTopUp(GOSPELS, ["Matthew", "Mark"], [], {});
+  const r = Engine.trainingTopUp(GOSPELS, scopeOf(["Matthew", "Mark"]), [], {});
   assert.deepEqual(r.introduced, ["Matthew 1", "Mark 1", "Matthew 2"]);
-  const st = Engine.trainingStatus(GOSPELS, ["Mark"], r.introduced, {});
+  const st = Engine.trainingStatus(GOSPELS, scopeOf(["Mark"]), r.introduced, {});
   assert.deepEqual(st.learning, ["Mark 1"]);
   assert.equal(st.total, 16);
 });
 
-test("training only asks about its chapters and favours ones still being learned", () => {
+test("training with some chapters chosen stays within them", () => {
+  const scope = scopeOf(["Matthew"], { Matthew: [5, 6, 7, 13] });
+  let introduced = [];
+  let stats = {};
+  for (let step = 0; step < 6; step++) {
+    introduced = Engine.trainingTopUp(GOSPELS, scope, introduced, stats).introduced;
+    stats = masterAll(stats, eventsIn(introduced[introduced.length - 1]));
+  }
+  assert.deepEqual(introduced, ["Matthew 5", "Matthew 6", "Matthew 7", "Matthew 13"]);
+  // Chapters brought in earlier with a wider choice are left out.
+  const st = Engine.trainingStatus(GOSPELS, scope, ["Matthew 1", "Matthew 5"], {});
+  assert.deepEqual(st.learning, ["Matthew 5"]);
+  assert.equal(st.total, 4);
+  const rng = Engine.seededRng(3);
+  for (let i = 0; i < 300; i++) {
+    const { event: e } = Engine.pickTrainingEvent(GOSPELS, scope, ["Matthew 1", "Matthew 5", "Matthew 6"], {}, {}, 0, rng);
+    assert.ok(e.ch === 5 || e.ch === 6, e.id);
+    for (const c of Engine.trainingChapterChoices(e, GOSPELS, scope, ["Matthew 1", "Matthew 5", "Matthew 6"], rng)) {
+      assert.ok(c.ch !== 1, `${e.id}: Matthew 1 is outside the scope`);
+    }
+  }
+});
+
+test("training only asks about chapters being learned until one is due for review", () => {
   const introduced = ["Matthew 1", "Matthew 2", "Matthew 3", "Matthew 4"];
   const stats = masterAll({}, eventsIn("Matthew 1"));
+  const now = 1e12;
   const rng = Engine.seededRng(4);
-  const counts = {};
-  for (let i = 0; i < 3000; i++) {
-    const e = Engine.pickTrainingEvent(GOSPELS, ["Matthew"], introduced, stats, rng);
-    assert.ok(introduced.includes(`${e.book} ${e.ch}`), e.id);
-    counts[e.id] = (counts[e.id] || 0) + 1;
+  const notDue = { "Matthew 1": { level: 2, due: now + 1 } };
+  for (let i = 0; i < 500; i++) {
+    const p = Engine.pickTrainingEvent(GOSPELS, MT, introduced, stats, notDue, now, rng);
+    assert.ok(["Matthew 2", "Matthew 3", "Matthew 4"].includes(`${p.event.book} ${p.event.ch}`), p.event.id);
+    assert.equal(p.review, false);
   }
-  const learnedHits = eventsIn("Matthew 1").reduce((n, e) => n + (counts[e.id] || 0), 0) / 2;
-  const learningHits = eventsIn("Matthew 3").reduce((n, e) => n + (counts[e.id] || 0), 0) / eventsIn("Matthew 3").length;
-  assert.ok(learnedHits > 0 && learningHits > learnedHits * 4, `${learningHits} vs ${learnedHits}`);
+  // Due (or never scheduled): about half the questions check it.
+  for (const review of [{ "Matthew 1": { level: 2, due: now } }, {}]) {
+    let reviews = 0;
+    for (let i = 0; i < 1000; i++) {
+      const p = Engine.pickTrainingEvent(GOSPELS, MT, introduced, stats, review, now, rng);
+      assert.equal(p.review, p.event.ch === 1, p.event.id);
+      if (p.review) reviews++;
+    }
+    assert.ok(reviews > 400 && reviews < 600, `${reviews}`);
+  }
   const avoid = eventsIn("Matthew 2").map((e) => e.id);
-  for (let i = 0; i < 200; i++) assert.ok(!avoid.includes(Engine.pickTrainingEvent(GOSPELS, ["Matthew"], introduced, stats, rng, avoid).id));
+  for (let i = 0; i < 200; i++) assert.ok(!avoid.includes(Engine.pickTrainingEvent(GOSPELS, MT, introduced, stats, notDue, now, rng, avoid).event.id));
+});
+
+test("reviews take the most overdue chapter, and run early once everything is learned", () => {
+  const scope = scopeOf(["Matthew"], { Matthew: [1, 2, 3] });
+  const introduced = ["Matthew 1", "Matthew 2", "Matthew 3"];
+  const stats = masterAll({}, introduced.flatMap(eventsIn));
+  const rng = Engine.seededRng(5);
+  const review = { "Matthew 1": { level: 1, due: 500 }, "Matthew 2": { level: 1, due: 100 }, "Matthew 3": { level: 1, due: 900 } };
+  assert.deepEqual(Engine.dueChapters(GOSPELS, scope, introduced, stats, review, 600), ["Matthew 2", "Matthew 1"]);
+  for (let i = 0; i < 50; i++) {
+    let p = Engine.pickTrainingEvent(GOSPELS, scope, introduced, stats, review, 600, rng);
+    assert.ok(p.review && p.event.ch === 2);
+    p = Engine.pickTrainingEvent(GOSPELS, scope, introduced, stats, review, 0, rng); // nothing due yet
+    assert.ok(p.review && p.event.ch === 2);
+  }
+});
+
+test("reviews space out when right and come back sooner after a miss", () => {
+  const S = Engine.REVIEW_STEPS;
+  const k = "Matthew 5";
+  let r = Engine.updateReview({}, k, false, false, 0);
+  assert.deepEqual(r, {});
+  r = Engine.updateReview(r, k, false, true, 1000); // just learned
+  assert.deepEqual(r[k], { level: 0, due: 1000 + S[0] });
+  r = Engine.updateReview(r, k, true, true, 2000); // right, but before it was due
+  assert.deepEqual(r[k], { level: 0, due: 2000 + S[0] });
+  let t = r[k].due;
+  for (let level = 1; level <= 5; level++) { // right on each due review
+    r = Engine.updateReview(r, k, true, true, t);
+    assert.deepEqual(r[k], { level, due: t + S[level] });
+    t = r[k].due;
+  }
+  r = Engine.updateReview(r, k, true, false, t); // missed: back to learning
+  assert.deepEqual(r[k], { level: 2, due: 0 });
+  r = Engine.updateReview(r, k, false, true, t + 5); // learned again
+  assert.deepEqual(r[k], { level: 2, due: t + 5 + S[2] });
+  t = r[k].due;
+  for (let i = 0; i < 20; i++) { r = Engine.updateReview(r, k, true, true, t); t = r[k].due; }
+  assert.equal(r[k].level, S.length - 1);
 });
 
 test("training mixes question styles, with verses only after a right answer", () => {
@@ -296,14 +376,15 @@ test("training mixes question styles, with verses only after a right answer", ()
 
 test("training chapter choices come from chapters in training", () => {
   for (const books of [["Matthew"], ALL]) {
+    const scope = scopeOf(books);
     let introduced = [];
     let stats = {};
     for (let step = 0; step < 40; step++) {
-      introduced = Engine.trainingTopUp(GOSPELS, books, introduced, stats).introduced;
+      introduced = Engine.trainingTopUp(GOSPELS, scope, introduced, stats).introduced;
       const rng = Engine.seededRng(step + 1);
       for (const k of introduced) {
         for (const e of eventsIn(k)) {
-          const choices = Engine.trainingChapterChoices(e, GOSPELS, books, introduced, rng);
+          const choices = Engine.trainingChapterChoices(e, GOSPELS, scope, introduced, rng);
           assert.ok(choices.length >= 3 && choices.length <= 4, `${e.id}: ${choices.length}`);
           assert.equal(choices.filter((c) => same(c, e)).length, 1, `${e.id} missing answer`);
           assert.equal(new Set(choices.map((c) => c.book + c.ch)).size, choices.length, `${e.id} duplicate`);
@@ -316,17 +397,18 @@ test("training chapter choices come from chapters in training", () => {
       }
       stats = masterAll(stats, eventsIn(introduced[introduced.length - 3]));
     }
-    assert.equal(introduced.length, Math.min(42, Engine.trainingStatus(GOSPELS, books, [], {}).total));
+    assert.equal(introduced.length, Math.min(42, Engine.trainingStatus(GOSPELS, scope, [], {}).total));
   }
 });
 
 test("'what happens in this chapter?' never offers something that happens there", () => {
   for (const books of [["Matthew"], ALL]) {
-    const introduced = Engine.trainingTopUp(GOSPELS, books, [], {}).introduced;
+    const scope = scopeOf(books);
+    const introduced = Engine.trainingTopUp(GOSPELS, scope, [], {}).introduced;
     for (let seed = 1; seed <= 3; seed++) {
       const rng = Engine.seededRng(seed);
       for (const e of Engine.eventPool(GOSPELS, books)) {
-        const choices = Engine.trainingEventChoices(e, GOSPELS, books, introduced.concat(`${e.book} ${e.ch}`), rng);
+        const choices = Engine.trainingEventChoices(e, GOSPELS, scope, introduced.concat(`${e.book} ${e.ch}`), rng);
         assert.equal(choices.length, 4, e.id);
         assert.equal(choices.filter((c) => c.id === e.id).length, 1, `${e.id} missing answer`);
         assert.equal(new Set(choices.map((c) => c.title)).size, 4, `${e.id} repeated title`);
@@ -345,7 +427,7 @@ test("'what happens in this chapter?' prefers events from chapters in training",
   const introduced = ["Matthew 1", "Matthew 2", "Matthew 3"];
   const rng = Engine.seededRng(2);
   for (const e of eventsIn("Matthew 2")) {
-    const wrong = Engine.trainingEventChoices(e, GOSPELS, ["Matthew"], introduced, rng).filter((c) => c.id !== e.id);
+    const wrong = Engine.trainingEventChoices(e, GOSPELS, MT, introduced, rng).filter((c) => c.id !== e.id);
     for (const c of wrong) assert.ok(c.ch === 1 || c.ch === 3, `${c.id}`);
     assert.equal(new Set(wrong.map((c) => c.ch)).size, 2, "both other chapters used");
   }

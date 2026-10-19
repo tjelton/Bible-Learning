@@ -376,6 +376,15 @@ p { margin: 0; }
 .verdict.ok { color: var(--good); }
 .verdict.miss { color: var(--bad); }
 .learned { background: var(--gold-soft); border-radius: 12px; padding: 10px 14px; font-weight: 600; }
+.lapsed { background: var(--bad-soft); border-radius: 12px; padding: 10px 14px; font-weight: 600; }
+.review-tag {
+  font: 600 var(--step--1)/1 var(--font-ui);
+  color: var(--accent);
+  border: 1.5px solid currentColor;
+  border-radius: 999px;
+  padding: 3px 8px;
+  white-space: nowrap;
+}
 .intro-lede { font: 400 var(--step-0)/1.6 var(--font-read); color: var(--muted); }
 .intro-ch { display: grid; gap: 4px; }
 .intro-ch + .intro-ch { padding-top: 14px; border-top: 1px solid var(--line); }
@@ -459,6 +468,24 @@ p { margin: 0; }
 .sec-range { color: var(--muted); font-size: var(--step--1); white-space: nowrap; }
 .tag { color: var(--accent); font-size: var(--step--1); font-weight: 600; }
 .sec .map { grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); }
+
+/* ── Training setup ── */
+.train-books { display: grid; gap: 10px; }
+.train-book {
+  display: grid; gap: 10px;
+  padding: 10px 14px 12px;
+  border-radius: var(--radius);
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+}
+.train-book.is-on { border-color: var(--accent); }
+.train-book-name { font: 400 var(--step-2)/1.2 var(--font-display); }
+.pick-map { grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); }
+.tile.pick { aspect-ratio: 1; }
+.tile.pick .n { font-size: var(--step-2); color: var(--muted); }
+.tile.pick[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); }
+.tile.pick[aria-pressed="true"] .n { color: var(--accent-ink); }
+.pick-tools { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .chapter-head { display: grid; gap: 4px; }
 .chapter-head .big { font: 400 var(--step-5)/1 var(--font-display); }
 .chapter-nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }

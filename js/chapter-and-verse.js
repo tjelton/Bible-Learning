@@ -19,8 +19,12 @@
   if (!settings.books.length) settings.books = ["Matthew"];
   let stats = store.get("cv.stats", {});
   let bests = Object.assign({ round: 0, lamps: 0, run: 0 }, store.get("cv.bests", {}));
-  // Training: the chapters brought in so far, in the order they were added.
-  let training = Object.assign({ chapters: [] }, store.get("cv.training", {}));
+  // Training: the chapters brought in so far, in the order they were added;
+  // the Gospels chosen to train on (null until first chosen: the Gospels that
+  // are on) and, for those limited to some chapters, which ones; and each
+  // learned chapter's review schedule.
+  const TRAINING_DEFAULT = { chapters: [], books: null, only: {}, review: {} };
+  let training = Object.assign({}, TRAINING_DEFAULT, store.get("cv.training", {}));
 
   const byId = {};
   for (const e of E.eventPool(GOSPELS, BOOKS)) byId[e.id] = e;
@@ -50,7 +54,35 @@
   }
   function saveSettings() { store.set("cv.settings", settings); }
   const shortRef = (k) => { const i = k.lastIndexOf(" "); return `${BOOK_ABBR[k.slice(0, i)]} ${k.slice(i + 1)}`; };
-  function trainingStatus() { return E.trainingStatus(GOSPELS, settings.books, training.chapters, stats); }
+  function saveTraining() { store.set("cv.training", training); }
+  function trainingBooks() { return (training.books || settings.books).filter((b) => GOSPELS[b]); }
+  function trainingScope() { return E.trainingScope(GOSPELS, trainingBooks(), training.only); }
+  function trainingStatus() { return E.trainingStatus(GOSPELS, trainingScope(), training.chapters, stats); }
+  function dueChapters() { return E.dueChapters(GOSPELS, trainingScope(), training.chapters, stats, training.review, Date.now()); }
+  // A list of chapter numbers as ranges: "1–7, 10, 12–14".
+  function rangeText(chs) {
+    const sorted = chs.slice().sort((a, b) => a - b);
+    const out = [];
+    for (let i = 0; i < sorted.length; i++) {
+      let j = i;
+      while (j + 1 < sorted.length && sorted[j + 1] === sorted[j] + 1) j++;
+      out.push(j > i ? `${sorted[i]}–${sorted[j]}` : `${sorted[i]}`);
+      i = j;
+    }
+    return out.join(", ");
+  }
+  // How long until a time, for "comes back in 3 days".
+  function fromNow(t) {
+    const m = Math.max(1, Math.round((t - Date.now()) / 60000));
+    if (m < 60) return `in ${plural(m, "minute")}`;
+    const h = Math.round(m / 60);
+    if (h < 24) return h === 1 ? "in an hour" : `in ${h} hours`;
+    const d = Math.round(h / 24);
+    if (d === 1) return "tomorrow";
+    if (d < 7) return `in ${d} days`;
+    if (d < 30) return d < 14 ? "in a week" : `in ${Math.round(d / 7)} weeks`;
+    return d < 60 ? "in a month" : `in ${Math.round(d / 30)} months`;
+  }
 
   const play = (kind) => Kit.sound(kind, settings.sound);
 
@@ -73,7 +105,8 @@
       firstIntro: false,
     };
     if (mode === "train") {
-      state.game.firstIntro = !training.chapters.length;
+      const st = trainingStatus();
+      state.game.firstIntro = !st.learning.length && !st.learned.length;
       state.game.intro = topUpTraining();
     }
     state.screen = "play";
@@ -83,10 +116,10 @@
   // Brings new chapters into training. Returns the ones to introduce (chapters
   // already learned in other modes join without an introduction).
   function topUpTraining() {
-    const r = E.trainingTopUp(GOSPELS, settings.books, training.chapters, stats);
+    const r = E.trainingTopUp(GOSPELS, trainingScope(), training.chapters, stats);
     if (!r.added.length) return [];
-    training = { chapters: r.introduced };
-    store.set("cv.training", training);
+    training.chapters = r.introduced;
+    saveTraining();
     return r.added.filter((k) => !E.chapterLearned(GOSPELS, k, stats));
   }
 
@@ -110,21 +143,23 @@
   }
 
   // Training mixes question styles: "chapter" gives the chapter and asks what
-  // happens there; "event" and "verse" ask for the chapter.
+  // happens there; "event" and "verse" ask for the chapter. Some questions
+  // are reviews of learned chapters.
   function nextTrainingQuestion() {
     const g = state.game;
     g.q = null;
     if (g.intro.length) return render(); // show the new chapters first
-    const pick = E.pickTrainingEvent(GOSPELS, settings.books, training.chapters, stats, Math.random, g.recent.slice(-3));
+    const scope = trainingScope();
+    const pick = E.pickTrainingEvent(GOSPELS, scope, training.chapters, stats, training.review, Date.now(), Math.random, g.recent.slice(-3));
     if (!pick) { state.game = null; state.screen = "home"; return render(); }
-    const e = byId[pick.id];
+    const e = byId[pick.event.id];
     g.recent = g.recent.concat(e.id).slice(-60);
     const type = E.trainingKind(stats[e.id], Math.random);
     g.q = {
-      id: e.id, type,
+      id: e.id, type, review: pick.review,
       choices: type === "chapter"
-        ? E.trainingEventChoices(e, GOSPELS, settings.books, training.chapters, Math.random)
-        : E.trainingChapterChoices(e, GOSPELS, settings.books, training.chapters, Math.random),
+        ? E.trainingEventChoices(e, GOSPELS, scope, training.chapters, Math.random)
+        : E.trainingChapterChoices(e, GOSPELS, scope, training.chapters, Math.random),
       removed: [], picked: null, hinted: false, points: null,
       startedAt: Date.now(),
     };
@@ -170,7 +205,11 @@
     stats = E.recordAnswer(stats, q.id, ok);
     store.set("cv.stats", stats);
     if (g.mode === "train") {
-      q.learned = !wasLearned && E.chapterLearned(GOSPELS, chapter, stats) ? chapter : null;
+      const nowLearned = E.chapterLearned(GOSPELS, chapter, stats);
+      q.learned = !wasLearned && nowLearned ? chapter : null;
+      q.lapsed = wasLearned && !nowLearned ? chapter : null;
+      training.review = E.updateReview(training.review, chapter, wasLearned, nowLearned, Date.now());
+      saveTraining();
       g.intro = g.intro.concat(topUpTraining());
     }
     play(q.learned ? "done" : ok ? "right" : "wrong");
@@ -205,7 +244,7 @@
     if (!app) return;
     opts = opts || {};
     app.className = "app" + (state.screen === "play" ? " is-play" : "");
-    const html = { home: homeHtml, play: playHtml, results: resultsHtml, study: studyHtml }[state.screen]();
+    const html = { home: homeHtml, setup: setupHtml, play: playHtml, results: resultsHtml, study: studyHtml }[state.screen]();
     app.innerHTML = html + (state.sheet ? sheetHtml() : "");
     document.body.style.overflow = state.sheet ? "hidden" : "";
     if (opts.animate != null) {
@@ -246,10 +285,17 @@
   }
 
   function trainingDesc() {
-    if (!training.chapters.length) return "Learn three chapters at a time. A new one joins each time you learn one";
     const st = trainingStatus();
-    if (!st.learning.length && st.learned.length >= st.total) return `All ${st.total} chapters learned · keep them fresh`;
-    return `${st.learned.length} of ${plural(st.total, "chapter")} learned · now ${st.learning.map(shortRef).join(", ")}`;
+    if (!st.learning.length && !st.learned.length) return "Choose the chapters you’re studying, then learn them three at a time";
+    const due = dueChapters().length;
+    const dueBit = due ? ` · ${due} to review` : "";
+    if (!st.learning.length && st.learned.length >= st.total) {
+      if (due) return `All ${plural(st.total, "chapter")} learned${dueBit}`;
+      const next = Math.min(...st.learned.map((k) => (training.review[k] || { due: 0 }).due));
+      return `All ${plural(st.total, "chapter")} learned · next review ${fromNow(next)}`;
+    }
+    const now = st.learning.length ? ` · now ${st.learning.map(shortRef).join(", ")}` : "";
+    return `${st.learned.length} of ${plural(st.total, "chapter")} learned${now}${dueBit}`;
   }
 
   function homeHtml() {
@@ -284,7 +330,7 @@
           <span class="mode-text"><span class="mode-name">Three lamps</span><span class="mode-desc">Keep going until your three lamps go out</span></span>
           <span class="lamps" aria-hidden="true">${ICON.lamp.replace("<svg", '<svg class="lamp"').repeat(3)}</span>
         </button>
-        <button type="button" class="btn mode-btn" data-action="start" data-mode="train">
+        <button type="button" class="btn mode-btn" data-action="setup">
           <span class="mode-text"><span class="mode-name">Training</span><span class="mode-desc">${esc(trainingDesc())}</span></span>${ICON.sprout}
         </button>
         <button type="button" class="btn btn-ghost mode-btn" data-action="study">
@@ -336,6 +382,61 @@
       </section>`;
   }
 
+  // Before training: which Gospels, and the whole book or only some chapters.
+  function setupHtml() {
+    const books = trainingBooks();
+    const scope = trainingScope();
+    const st = trainingStatus();
+    const rows = BOOKS.filter((b) => GOSPELS[b]).map((b) => {
+      const on = books.includes(b);
+      const n = gospel(b).chapters;
+      const only = training.only[b];
+      const mine = scope.filter((k) => k.slice(0, k.lastIndexOf(" ")) === b);
+      const learned = mine.filter((k) => E.chapterLearned(GOSPELS, k, stats)).length;
+      const summary = !on ? "Off"
+        : (only ? (only.length ? `Chapters ${rangeText(only)}` : "No chapters chosen") : `All ${n} chapters`) +
+          (learned ? ` · ${learned} learned` : "");
+      let body = "";
+      if (on) {
+        body = `<div class="segmented" role="group" aria-label="${b} chapters">
+            <button type="button" data-action="train-range" data-book="${b}" data-value="all" aria-pressed="${!only}">Whole book</button>
+            <button type="button" data-action="train-range" data-book="${b}" data-value="some" aria-pressed="${!!only}">Some chapters</button>
+          </div>`;
+        if (only) {
+          let tiles = "";
+          for (let c = 1; c <= n; c++) {
+            const picked = only.includes(c);
+            tiles += `<button type="button" class="tile pick" data-action="train-ch" data-book="${b}" data-ch="${c}" aria-pressed="${picked}" aria-label="${b} ${c}"><span class="n">${c}</span></button>`;
+          }
+          body += `<div class="map pick-map">${tiles}</div>
+            <div class="pick-tools">
+              <span class="option-help">Tap the chapters you’re studying.</span>
+              <button type="button" class="btn btn-small btn-ghost" data-action="train-all" data-book="${b}">${only.length === n ? "Clear" : "Select all"}</button>
+            </div>`;
+        }
+      }
+      return `<section class="train-book${on ? " is-on" : ""}">
+          <div class="switch-row">
+            <span><span class="train-book-name">${b}</span><br><span class="option-help">${esc(summary)}</span></span>
+            <button type="button" class="switch" role="switch" aria-checked="${on}" aria-label="Train on ${b}" data-action="train-book" data-book="${b}"></button>
+          </div>
+          ${body}
+        </section>`;
+    }).join("");
+    const started = st.learning.length || st.learned.length;
+    return `
+      <div class="page-head">
+        <button type="button" class="icon-btn" data-action="home" aria-label="Back to home">${ICON.back}</button>
+        <h1>Training</h1>
+      </div>
+      <p class="study-intro">What do you want to train on? Choose the Gospels and chapters you’re studying. Training starts with the first three and brings in the next each time you learn one. Chapters you’ve learned come back now and then to check you still know them.</p>
+      <div class="train-books">${rows}</div>
+      <div class="actions">
+        <button type="button" class="btn btn-primary" data-action="start" data-mode="train" ${scope.length ? "" : "disabled"}>${started ? "Carry on training" : "Start training"} ${ICON.arrow}</button>
+      </div>
+      ${scope.length ? "" : `<p class="option-help" style="text-align:center">Choose at least one chapter to train on.</p>`}`;
+  }
+
   function topbarHtml(g, status) {
     return `
       <div class="topbar">
@@ -361,7 +462,7 @@
   function introHtml(g) {
     const first = g.firstIntro;
     const lede = first
-      ? `Training starts with ${g.intro.length === 1 ? "this chapter" : `these ${["", "", "two", "three"][g.intro.length] || g.intro.length} chapters`}. Read what happens in each, then answer questions on them. Each time you learn a chapter (every event in it right twice in a row), the next one joins.`
+      ? `Training starts with ${g.intro.length === 1 ? "this chapter" : `these ${["", "", "two", "three"][g.intro.length] || g.intro.length} chapters`}. Read what happens in each, then answer questions on them. Each time you learn a chapter (every event in it right twice in a row), the next one joins, and the learned one comes back now and then for review.`
       : `Here’s what happens in ${g.intro.length === 1 ? "it" : "them"}. Questions on ${g.intro.length === 1 ? "it start" : "them start"} now, alongside your other chapters.`;
     const chapters = g.intro.map((k) => {
       const i = k.lastIndexOf(" ");
@@ -396,6 +497,7 @@
     const ok = answered && q.picked >= 0 && isRight(q, q.choices[q.picked]);
 
     const status = g.mode === "train" ? trainingSetHtml() : Kit.roundStatus(g, answered, ROUND_LENGTH, LAMPS);
+    const multi = (g.mode === "train" ? new Set(trainingScope().map((k) => k.slice(0, k.lastIndexOf(" ")))).size : settings.books.length) > 1;
 
     const clue = q.type === "chapter"
       ? `<h2 class="chapter-ask">${esc(e.book)} ${e.ch}</h2>`
@@ -437,7 +539,8 @@
       ${topbarHtml(g, status)}
       <article class="card${answered ? "" : " is-asking"}" aria-live="polite">
         <div class="card-top">
-          <span class="kind">${q.type === "chapter" ? "What happens in this chapter?" : settings.books.length > 1 ? (q.type === "verse" ? "Which Gospel and chapter is this verse in?" : "Which Gospel and chapter?") : q.type === "verse" ? "Which chapter is this verse in?" : "Which chapter is this in?"}</span>
+          <span class="kind">${q.type === "chapter" ? "What happens in this chapter?" : multi ? (q.type === "verse" ? "Which Gospel and chapter is this verse in?" : "Which Gospel and chapter?") : q.type === "verse" ? "Which chapter is this verse in?" : "Which chapter is this in?"}</span>
+          ${q.review ? `<span class="review-tag">Review</span>` : ""}
         </div>
         ${clue}
         ${answered ? revealHtml(e, ok, q) : ""}
@@ -456,9 +559,15 @@
       : !picked ? "Here’s the answer."
         : q.type === "chapter" ? `Not quite. “${picked.title}” is in ${picked.book} ${picked.ch}.`
           : `Not quite. You picked ${picked.book} ${picked.ch}.`;
+    const chapter = `${e.book} ${e.ch}`;
+    const review = training.review[chapter];
     const learned = q.learned
-      ? `<p class="learned" role="status">${esc(q.learned)} learned!${state.game.intro.length ? ` Next up: ${esc(state.game.intro.join(", "))}.` : ""}</p>`
-      : "";
+      ? `<p class="learned" role="status">${esc(q.learned)} learned! It comes back for review ${fromNow(review.due)}.${state.game.intro.length ? ` Next up: ${esc(state.game.intro.join(", "))}.` : ""}</p>`
+      : q.lapsed
+        ? `<p class="lapsed" role="status">${esc(q.lapsed)} needs another look, so it’s back with the chapters you’re learning.</p>`
+        : q.review && ok && review && review.due > Date.now()
+          ? `<p class="learned" role="status">You still know ${esc(chapter)}. Next review ${fromNow(review.due)}.</p>`
+          : "";
     const keyVerse = q.type !== "verse"
       ? `<p class="key-verse">${esc(E.cleanVerse(E.verseText(TEXT, e, e.key)))} <span style="font-style:normal">(${e.ch}:${e.key})</span></p>`
       : `<p class="ref-title">${esc(e.title)}</p>`;
@@ -579,6 +688,36 @@
     if (a !== "reset") state.resetArmed = false;
     switch (a) {
       case "start": startGame(el.dataset.mode); window.scrollTo(0, 0); break;
+      case "setup": state.screen = "setup"; render({ scrollTop: true }); break;
+      case "train-book": {
+        const b = el.dataset.book;
+        const books = trainingBooks();
+        training.books = books.includes(b) ? books.filter((x) => x !== b) : books.concat(b);
+        saveTraining(); render();
+        break;
+      }
+      case "train-range": {
+        const only = Object.assign({}, training.only);
+        if (el.dataset.value === "some") only[el.dataset.book] = only[el.dataset.book] || [];
+        else delete only[el.dataset.book];
+        training.only = only;
+        saveTraining(); render();
+        break;
+      }
+      case "train-ch": {
+        const b = el.dataset.book, c = Number(el.dataset.ch);
+        const list = training.only[b] || [];
+        training.only = Object.assign({}, training.only, { [b]: list.includes(c) ? list.filter((x) => x !== c) : list.concat(c).sort((x, y) => x - y) });
+        saveTraining(); render();
+        break;
+      }
+      case "train-all": {
+        const b = el.dataset.book, n = gospel(b).chapters;
+        const all = (training.only[b] || []).length === n;
+        training.only = Object.assign({}, training.only, { [b]: all ? [] : Array.from({ length: n }, (_, i) => i + 1) });
+        saveTraining(); render();
+        break;
+      }
       case "answer": answer(Number(el.dataset.index)); break;
       case "hint": useHint(); break;
       case "dunno": answer(-1); break;
@@ -615,7 +754,7 @@
           setTimeout(() => { if (state.resetArmed) { state.resetArmed = false; if (state.screen === "home") render(); } }, 4000);
         } else {
           state.resetArmed = false;
-          stats = {}; bests = { round: 0, lamps: 0, run: 0 }; training = { chapters: [] };
+          stats = {}; bests = { round: 0, lamps: 0, run: 0 }; training = Object.assign({}, TRAINING_DEFAULT);
           store.remove("cv.stats"); store.remove("cv.bests"); store.remove("cv.training");
           render();
         }
@@ -650,7 +789,7 @@
     art: '<span class="art-amp">&amp;</span>',
     summary() {
       const bits = [`${masteredCount()} of ${Object.keys(byId).length} events mastered`];
-      if (training.chapters.length) bits.push(`${trainingStatus().learned.length} chapters learned in training`);
+      if (training.chapters.length) bits.push(`${plural(trainingStatus().learned.length, "chapter")} learned in training`);
       if (bests.round) bits.push(`best round ${fmt(bests.round)}`);
       return bits.join(" · ");
     },
@@ -668,7 +807,7 @@
       if (!saved || !saved.screen) return;
       state = Object.assign(state, saved);
       if (state.game && state.game.q) state.game.q.startedAt = Date.now();
-      if (state.screen !== "home" && state.screen !== "study" && !state.game) state.screen = "home";
+      if (!["home", "setup", "study"].includes(state.screen) && !state.game) state.screen = "home";
     },
   };
 })();
