@@ -1,4 +1,4 @@
-// Downloads a Gospel's full text (World English Bible, public domain) from
+// Downloads a book's full text (World English Bible, public domain) from
 // bible-api.com and writes it to js/data/text-<book>.js for offline use.
 //
 // Usage: node scripts/fetch-text.mjs Matthew 28

@@ -17,7 +17,10 @@
   const PARTS = [
     { id: "bible", testament: "Old and New Testaments", name: "The Whole Bible", books: "Genesis to Revelation",
       lede: "Games that range across all sixty-six books.",
-      games: ["clusters"] },
+      games: ["clusters", "number-crunch", "before-or-after"] },
+    { id: "old-testament", testament: "Old Testament", name: "The Old Testament", books: "Genesis to Malachi",
+      lede: "From creation to the prophets. Pick a game.",
+      games: ["proverbs"] },
     { id: "gospels", testament: "New Testament", name: "The Gospels", books: "Matthew, Mark, Luke and John",
       lede: "Four accounts of the life of Jesus. Pick a game.",
       games: ["chapter-and-verse", "which-gospel"] },

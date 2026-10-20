@@ -137,7 +137,7 @@ for (const g of CLUSTERS) {
   for (const f of g.fits || []) if (words.includes(f.toLowerCase())) errors.push(`${where}: "${f}" is in both items and fits`);
   for (const [word, ref, find] of g.items) {
     const verses = CLUSTERS_TEXT[ref];
-    if (!verses) { errors.push(`${where}: no text for "${ref}" (run scripts/fetch-clusters-text.mjs)`); continue; }
+    if (!verses) { errors.push(`${where}: no text for "${ref}" (run scripts/fetch-verses.mjs)`); continue; }
     if (g.books) {
       if (ref !== `${word} 1:1`) errors.push(`${where}: a book's reference must be its first verse ("${word} 1:1")`);
     } else if (!phrase(find || word).test(verses.join(" "))) {
@@ -156,6 +156,64 @@ for (const g of clGroups) {
   if (!ok) errors.push(`clusters ${g.id}: never fits in a puzzle with groups from the other levels`);
 }
 console.error(`Clusters: ${CLUSTERS.length} groups (${CL.LEVELS.map((lv) => CLUSTERS.filter((g) => g.level === lv).length).join(" / ")} by level)`);
+
+// Words quoted in a note (“…”) must come from the passage shown with it.
+function checkQuotes(where, note, text) {
+  for (const [, q] of (note || "").matchAll(/“([^”]+)”/g)) {
+    if (!words(text).includes(words(q))) errors.push(`${where}: quoted “${q}” isn’t in the passage`);
+  }
+}
+
+// ── Number Crunch ──
+// Every passage must be downloaded and state the number (its `find` phrase),
+// and the answer must sit on the slider, at one of its steps.
+vm.runInContext(readFileSync(new URL("number-crunch.js", root), "utf8"), ctx, { filename: "number-crunch.js" });
+vm.runInContext(readFileSync(new URL("number-crunch-text.js", root), "utf8"), ctx, { filename: "number-crunch-text.js" });
+const { NUMBER_CRUNCH, NUMBER_CRUNCH_TEXT } = ctx.window;
+const NC = require("../js/number-crunch-engine.js");
+for (const f of NUMBER_CRUNCH) {
+  const where = `number-crunch ${f.id}`;
+  if (ids.has(f.id)) errors.push(`${where}: duplicate id`);
+  ids.add(f.id);
+  for (const k of ["id", "q", "ref", "find", "note"]) if (!f[k]) errors.push(`${where}: missing ${k}`);
+  if (typeof f.unit !== "string") errors.push(`${where}: unit must be a string (it can be empty)`);
+  if (/['"]/.test(f.q + f.note + f.unit)) errors.push(`${where}: use curly quotes and apostrophes`);
+  const min = f.min || 0;
+  if (!(Number.isInteger(f.a) && f.a >= min && f.a < f.max)) errors.push(`${where}: answer ${f.a} must be a whole number from ${min} up to (not including) ${f.max}`);
+  if (f.a % NC.step(f)) errors.push(`${where}: answer ${f.a} isn’t a multiple of the slider step ${NC.step(f)}`);
+  const verses = NUMBER_CRUNCH_TEXT[f.ref];
+  if (!verses) { errors.push(`${where}: no text for "${f.ref}" (run scripts/fetch-verses.mjs)`); continue; }
+  const text = verses.join(" ");
+  if (!phrase(f.find).test(text)) errors.push(`${where}: "${f.find}" not found in ${f.ref}`);
+  checkQuotes(where, f.note, text);
+}
+console.error(`Number Crunch: ${NUMBER_CRUNCH.length} numbers`);
+
+// ── Before or After? ──
+// Every passage must be downloaded and contain the event's `find` phrase (and
+// any words its title quotes), and every `with` tag must be shared (a tag on one event alone does nothing).
+// The order itself was checked by hand.
+vm.runInContext(readFileSync(new URL("before-or-after.js", root), "utf8"), ctx, { filename: "before-or-after.js" });
+vm.runInContext(readFileSync(new URL("before-or-after-text.js", root), "utf8"), ctx, { filename: "before-or-after-text.js" });
+const { BEFORE_OR_AFTER, BEFORE_OR_AFTER_TEXT } = ctx.window;
+const tagCount = {};
+for (const era of BEFORE_OR_AFTER) {
+  if (!era.era || !era.events?.length) errors.push(`before-or-after: every era needs a name and events`);
+  for (const e of era.events) {
+    const where = `before-or-after ${e.id}`;
+    if (ids.has(e.id)) errors.push(`${where}: duplicate id`);
+    ids.add(e.id);
+    for (const k of ["id", "title", "ref", "find"]) if (!e[k]) errors.push(`${where}: missing ${k}`);
+    if (/['"]/.test(e.title)) errors.push(`${where}: use curly quotes and apostrophes`);
+    for (const t of e.with || []) tagCount[t] = (tagCount[t] || 0) + 1;
+    const verses = BEFORE_OR_AFTER_TEXT[e.ref];
+    if (!verses) { errors.push(`${where}: no text for "${e.ref}" (run scripts/fetch-verses.mjs)`); continue; }
+    if (!phrase(e.find).test(verses.join(" "))) errors.push(`${where}: "${e.find}" not found in ${e.ref}`);
+    checkQuotes(where, e.title, verses.join(" "));
+  }
+}
+for (const [t, n] of Object.entries(tagCount)) if (n < 2) errors.push(`before-or-after: tag "${t}" is only on one event`);
+console.error(`Before or After?: ${BEFORE_OR_AFTER.reduce((n, era) => n + era.events.length, 0)} events in ${BEFORE_OR_AFTER.length} eras`);
 
 if (errors.length) {
   console.error(errors.join("\n"));

@@ -147,11 +147,27 @@
     return `<div class="lamps" aria-label="${plural(g.lamps, "lamp")} left">${lamps}<span class="run">Run <b class="tabular">${g.streak}</b></span></div>`;
   }
 
+  // ── Passages ──
+  // A passage with a phrase marked: `verses` are the texts of consecutive
+  // verses starting at verse number `first`, and the first match of `find`
+  // (whole words, any case) is highlighted.
+  function markedPassageHtml(heading, first, verses, find) {
+    const re = find
+      ? new RegExp(`(?<![\\p{L}\\p{N}])(${esc(find).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})(?![\\p{L}\\p{N}])`, "iu")
+      : null;
+    const body = verses.map((t, i) => {
+      const text = re ? esc(t).replace(re, '<mark class="is-key">$1</mark>') : esc(t);
+      return `<span><sup>${first + i}</sup>${text}</span>`;
+    }).join(" ");
+    return `<h3 class="passage-ref">${esc(heading)}</h3><p class="passage">${body}</p>`;
+  }
+
   // ── Passage sheet ──
   // passages: [{ heading, verses: [{ n, text }], key }] where `key` is a verse
-  // number to highlight. `intro` is an optional line above the passages.
-  function sheetHtml({ eyebrow, title, intro, passages, attribution }) {
-    const body = passages.map((p) => {
+  // number to highlight, or `html` for passages already built. `intro` is an
+  // optional line above the passages.
+  function sheetHtml({ eyebrow, title, intro, passages, html, attribution }) {
+    const body = html || passages.map((p) => {
       const verses = p.verses
         .map((v) => `<span${v.n === p.key ? ' class="is-key"' : ""}><sup>${v.n}</sup>${esc(v.text)}</span>`)
         .join(" ");
@@ -173,6 +189,6 @@
 
   window.Kit = {
     store, saveWarning, esc, fmt, plural, ICON, crumb,
-    sound, confetti, floatPoints, pointsNote, roundStatus, sheetHtml,
+    sound, confetti, floatPoints, pointsNote, roundStatus, markedPassageHtml, sheetHtml,
   };
 })();

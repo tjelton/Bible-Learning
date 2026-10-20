@@ -3,12 +3,18 @@
 # Bible Learning
 
 Quick-fire phone games for learning the Bible. You start by choosing which part of the
-Bible to study, and each part has its own page of games: the Whole Bible and the
-Gospels so far; others can be added later.
+Bible to study, and each part has its own page of games: the Whole Bible, the Old
+Testament and the Gospels so far; others can be added later.
 
-The Whole Bible has one game:
+The Whole Bible has three games:
 
 - **Clusters**: group sixteen words from across the Bible into four clusters of four.
+- **Number Crunch**: guess a number from the Bible on a slider. The closer, the more you score.
+- **Before or After?**: say whether one moment in the Bible's story came before or after another.
+
+The Old Testament has one game:
+
+- **Finish the Proverb**: read the first half of one of Solomon's proverbs and pick its real ending.
 
 The Gospels have two games:
 
@@ -44,6 +50,66 @@ most recently.
 - The home screen counts puzzles solved, perfect solves and your streak, and saves a
   puzzle in progress so you can come back to it. Starting a new one instead ends the
   streak.
+
+## Number Crunch
+
+A question with a number for its answer, such as how many years Methuselah lived, how
+many foxes Samson caught, or how many fish were in the net in John 21. Drag the slider
+to your guess (or fine-tune it with − and +) and lock it in. The guess and the answer
+then appear as pins on the track, with the gap between them shaded.
+
+There are 101 numbers from Genesis to Revelation, each with the verse that gives it and
+a line of background.
+
+- Each guess scores up to 100 points for closeness: full marks for the exact number,
+  falling to nothing a quarter of the slider's range away. The exact number earns a
+  50-point bullseye bonus.
+- **Play a round**: 10 numbers. **Three lamps**: a guess worth fewer than 50 points puts
+  out a lamp.
+- Numbers that share a theme (all the forties, Samson's exploits) never come up in the
+  same round.
+- **All the numbers** lists every number from smallest to largest, with its verse.
+
+The slider moves in steps of 1 below 10,000, and in steps that keep about a thousand
+stops across it above that, so every answer can be hit exactly.
+
+## Before or After?
+
+A moment from the Bible's story, such as "David kills Goliath", and you say whether it
+happened before or after the one before it. The new moment then becomes the one to
+beat. The answer shows both on a short timeline.
+
+There are 150 events in nine eras, from creation to John on Patmos, in the order of the
+story rather than the order of the books (Esther comes after the temple is rebuilt,
+Jonah in the days of the divided kingdom).
+
+- The next event is drawn from within 60 places of the last one. Every right answer in
+  a row brings that in by 5, down to 8, so the gaps get smaller as your run grows. If
+  everything that close was asked recently, it takes one of the nearest that wasn't.
+- Some events can't be put in order from the text: Ruth sometime "in the days when the
+  judges judged", the wise men and Simeon, the furnace and the fall of Jerusalem. These
+  share a tag and are never asked against each other.
+- **Play a round** (10 questions, with the speed bonus) and **Three lamps** work as in
+  the Gospel games. **The timeline** lists every event in order, era by era, with its
+  passage.
+
+## Finish the Proverb
+
+The first half of a proverb, and four endings to choose from. The wrong endings are
+real endings of other proverbs, so they all sound like Proverbs.
+
+The proverbs come from the two collections of Solomon's sayings, chapters 10:1–22:16 and
+25–29, where almost every verse is a self-contained couplet. They aren't listed by hand:
+`js/proverbs-engine.js` splits each verse of the text where its two lines meet (at
+", but", a semicolon, "As … so", "Better … than", and so on). Verses that run on from
+the one before, or contain a quotation, are left out. That leaves 410 proverbs.
+
+- Wrong endings come from proverbs split the same way, so a "…but" ending is up against
+  other "…but" endings. They are never close in wording to the right ending.
+- Near-duplicates (14:12 and 16:25 are word for word the same) are grouped: a round
+  never asks both, and neither is offered as a wrong answer to the other.
+- **Play a round** and **Three lamps** work as in the Gospel games, with a 50/50.
+  **Read the proverbs** opens each chapter, with the proverbs you've learned highlighted.
 
 ## Chapter & Verse
 
@@ -140,7 +206,8 @@ python3 -m http.server 8000
 ```
 
 Each screen has its own address, so the back button works and you can link straight to a
-game: `#/` (choose a part), `#/bible`, `#/bible/clusters`, `#/gospels`,
+game: `#/` (choose a part), `#/bible`, `#/bible/clusters`, `#/bible/number-crunch`,
+`#/bible/before-or-after`, `#/old-testament`, `#/old-testament/proverbs`, `#/gospels`,
 `#/gospels/chapter-and-verse`, `#/gospels/which-gospel`.
 
 To play on an iPhone, host the folder anywhere that serves static files (GitHub Pages,
@@ -163,10 +230,10 @@ for hosts that take a single page.
 ## Accuracy
 
 - Scripture text is the **World English Bible** (public domain), downloaded verbatim by
-  `scripts/fetch-text.mjs` from bible-api.com and stored in `js/data/text-<book>.js`.
-  Clusters stores only the verses it cites, in `js/data/clusters-text.js`,
-  downloaded by `scripts/fetch-clusters-text.mjs` (whole chapters are cached in
-  `.cache/`, which isn't committed).
+  `scripts/fetch-text.mjs` from bible-api.com and stored in `js/data/text-<book>.js`
+  (the four Gospels and Proverbs). The other whole-Bible games store only the verses
+  they cite, in `js/data/<game>-text.js`, downloaded by `scripts/fetch-verses.mjs`
+  (whole chapters are cached in `.cache/`, which isn't committed).
 - `node scripts/check-data.mjs` checks all the data:
   - Chapter & Verse events: verse ranges exist, the key verse is inside the passage,
     parallel references are valid, and every chapter has events. `--print [Book]` shows
@@ -180,6 +247,12 @@ for hosts that take a single page.
     `find` phrase), each book group's words are books, and every group can appear in
     some puzzle. Whether each word really belongs, and whether any word could also
     fit another group, was checked by hand.
+  - Number Crunch facts: every passage contains the phrase that states the number, and
+    the answer sits on one of the slider's steps.
+  - Before or After? events: every passage contains the event's `find` phrase, and
+    every uncertain-order tag is shared by at least two events. The order itself was
+    checked by hand.
+  - In both, any words quoted in a note or title must appear in its passage.
 - Clues are paraphrases written to match the text, using the same wording as this
   translation (e.g. "Zacharias").
 - Chapter & Verse's parallels (`par`) follow the usual synopsis pairings at chapter level.
@@ -209,6 +282,27 @@ node --test
 - every word belongs to exactly one of its puzzle's groups, and families never meet
 - unseen groups come first, and recent ones are held back
 - checking guesses (including three of one group), and the ranks quoting the text
+
+`tests/number-crunch.test.mjs` covers Number Crunch:
+
+- slider steps, scoring and verdicts
+- that every answer can be hit exactly
+- that a round never asks two numbers from the same group
+- the ranks quoting the text
+
+`tests/before-or-after.test.mjs` covers Before or After?:
+
+- the timeline and the before/after answer
+- that events of uncertain order are never paired
+- that the next event is within reach for the run, and isn't recent
+- the ranks quoting the text
+
+`tests/proverbs.test.mjs` covers Finish the Proverb:
+
+- splitting proverbs, and leaving out verses that run on or quote someone
+- that every proverb rebuilds its verse, and near-duplicates are grouped
+- the four endings: the right one, and three of the same kind that can't be mistaken for it
+- the 50/50, rounds without near-duplicates, and the ranks quoting the text
 
 `tests/which-gospel.test.mjs` covers Which Gospel?:
 
@@ -252,8 +346,28 @@ node --test
 - optionally a `family`, shared by groups that should never meet
 - `books: true` for groups of books, whose references are each book's first verse
 
-After adding references, run `node scripts/fetch-clusters-text.mjs` to download their
-verses.
+**Number Crunch facts** live in `js/data/number-crunch.js`. Each has:
+
+- a stable `id`
+- the question `q`, the answer `a`, and the slider's `max` (and optional `min`)
+- a `unit` shown after the number (it can be empty)
+- `ref` and a `find` phrase that states the number in that passage
+- a `note` shown after the answer
+- optionally a `group`, shared by facts that shouldn't meet in one round
+
+**Before or After? events** live in `js/data/before-or-after.js`, in story order and
+grouped into eras. Each has:
+
+- a stable `id`
+- a short `title`
+- `ref` and a `find` phrase in that passage
+- optionally `with`: tags shared by events whose order the text leaves uncertain
+
+**Finish the Proverb** has no data file of its own: it reads `js/data/text-proverbs.js`.
+Its collections and splitting rules are at the top of `js/proverbs-engine.js`.
+
+After adding references to Clusters, Number Crunch or Before or After?, run
+`node scripts/fetch-verses.mjs` to download their verses.
 
 After editing any of these, run `node scripts/check-data.mjs` and `node --test`.
 
@@ -276,11 +390,19 @@ js/which-gospel-engine.js   Which Gospel? rules: answers, grading, hints (no DOM
 js/which-gospel.js          Which Gospel? screens and input
 js/clusters-engine.js       Clusters rules: building puzzles, checking guesses (no DOM)
 js/clusters.js              Clusters screens and input
+js/number-crunch-engine.js  Number Crunch rules: slider steps, scoring (no DOM)
+js/number-crunch.js         Number Crunch screens and input
+js/before-or-after-engine.js  Before or After? rules: the timeline, pairing, picking (no DOM)
+js/before-or-after.js       Before or After? screens and input
+js/proverbs-engine.js       Finish the Proverb rules: splitting, wrong endings (no DOM)
+js/proverbs.js              Finish the Proverb screens and input
 js/data/<book>.js           each Gospel's events and outline
-js/data/text-<book>.js      each Gospel's full text (WEB)
+js/data/text-<book>.js      the full text of each Gospel and Proverbs (WEB)
 js/data/which-gospel.js     Which Gospel? questions
 js/data/clusters.js         Clusters groups
-js/data/clusters-text.js    the verses Clusters cites (WEB)
+js/data/number-crunch.js    Number Crunch facts
+js/data/before-or-after.js  Before or After? events, in story order
+js/data/<game>-text.js      the verses each whole-Bible game cites (WEB)
 scripts/                    fetch text, check data, build single file
 tests/                      node:test unit tests
 ```

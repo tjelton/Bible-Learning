@@ -734,6 +734,112 @@ h2.sec-name { font: 600 var(--step-1)/1.3 var(--font-ui); }
 }
 .passage mark.is-key { color: inherit; }
 
+/* ── Number Crunch ── */
+.art-num { font: 400 76px/1 var(--font-display); color: #dab562; transform: translateY(-9px); }
+.nc-question { font: 400 var(--step-3)/1.15 var(--font-display); }
+.nc-dial { display: grid; gap: 8px; flex: none; }
+.nc-readout { text-align: center; line-height: 1; }
+.nc-num { font: 400 var(--step-5)/1 var(--font-display); color: var(--gold); }
+.nc-unit { font: 500 var(--step-1)/1 var(--font-ui); color: var(--muted); }
+.nc-slider {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; height: 44px; margin: 0;
+  background: transparent;
+  touch-action: pan-y;
+}
+.nc-slider::-webkit-slider-runnable-track { height: 10px; border-radius: 5px; background: var(--surface-2); }
+.nc-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 32px; height: 32px; margin-top: -11px;
+  border-radius: 50%; border: 3px solid var(--surface);
+  background: var(--accent); box-shadow: var(--shadow);
+}
+.nc-slider::-moz-range-track { height: 10px; border-radius: 5px; background: var(--surface-2); }
+.nc-slider::-moz-range-thumb { width: 26px; height: 26px; border-radius: 50%; border: 3px solid var(--surface); background: var(--accent); box-shadow: var(--shadow); }
+.nc-scale { display: flex; justify-content: space-between; color: var(--muted); font-size: var(--step--1); }
+.nc-actions { display: grid; grid-template-columns: 56px minmax(0, 1fr) 56px; gap: 10px; }
+.nc-nudge { padding: 0; font: 500 var(--step-3)/1 var(--font-ui); }
+/* After locking in: the guess and the answer as pins on the track, the gap between them shaded. */
+.nc-track { position: relative; height: 64px; margin-inline: 9px; }
+.nc-track::before, .nc-gap {
+  content: "";
+  position: absolute; top: 50%; height: 10px; margin-top: -5px;
+  border-radius: 5px;
+}
+.nc-track::before { left: -9px; right: -9px; background: var(--surface-2); }
+.nc-gap { left: calc(var(--from) * 100%); width: calc((var(--to) - var(--from)) * 100%); background: var(--gold-soft); }
+.nc-pin {
+  position: absolute; top: 50%; left: calc(var(--p) * 100%);
+  width: 18px; height: 18px; margin: -9px 0 0 -9px;
+  border-radius: 50%; border: 3px solid var(--surface);
+  box-shadow: var(--shadow);
+}
+/* Labels sit right of a pin at the left end and left of it at the right end, so they never overflow. */
+.nc-pin b {
+  position: absolute; left: 50%;
+  transform: translateX(calc(var(--p) * -100%));
+  white-space: nowrap;
+  font: 600 var(--step-0)/1 var(--font-ui);
+}
+.nc-pin.is-answer { background: var(--gold); z-index: 1; animation: pin-drop 0.45s ease; }
+.nc-pin.is-answer b { bottom: 20px; color: var(--gold); }
+.nc-pin.is-guess { background: var(--bad); }
+.nc-pin.is-guess.is-ok { background: var(--good); }
+.nc-pin.is-guess b { top: 20px; color: var(--muted); }
+@keyframes pin-drop { from { transform: translateY(-16px); opacity: 0; } }
+
+/* ── Before or After? ── */
+.art-order { width: 40px; height: 40px; }
+.ba-than { font: italic 400 var(--step-1)/1.3 var(--font-read); color: var(--muted); }
+.ba-anchor {
+  display: grid; gap: 4px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  border: 1.5px dashed var(--line);
+  background: color-mix(in srgb, var(--surface-2) 45%, var(--surface));
+}
+.ba-era { font: 600 var(--step--1)/1.2 var(--font-ui); letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold); }
+.ba-title { font: 500 var(--step-1)/1.3 var(--font-read); }
+.ba-ref { font-size: var(--step--1); color: var(--muted); }
+/* After answering: both events on a short timeline, earlier at the top. */
+.ba-end { font: 600 var(--step--1)/1 var(--font-ui); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); padding-left: 28px; }
+.ba-line { list-style: none; margin: 0; padding: 0 0 0 28px; display: grid; gap: 14px; position: relative; }
+.ba-line::before { content: ""; position: absolute; left: 9px; top: -6px; bottom: -6px; width: 2px; border-radius: 1px; background: var(--line); }
+.ba-node {
+  position: relative;
+  width: 100%;
+  display: grid; gap: 3px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+  text-align: left;
+}
+.ba-node::before {
+  content: "";
+  position: absolute; left: -25px; top: 50%;
+  width: 12px; height: 12px; margin-top: -6px;
+  border-radius: 50%; border: 2px solid var(--surface);
+  background: var(--muted);
+}
+.ba-node.is-ok { border-color: var(--good); background: var(--good-soft); }
+.ba-node.is-ok::before { background: var(--good); }
+.ba-node.is-miss { border-color: var(--bad); background: var(--bad-soft); }
+.ba-node.is-miss::before { background: var(--bad); }
+.ba-node.pop { animation: pop 0.35s ease; }
+.ba-node.shake { animation: shake 0.4s ease; }
+.ba-picks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; flex: none; }
+.ba-pick { min-height: 64px; font: 600 var(--step-2)/1 var(--font-ui); }
+.ba-pick svg { width: 22px; height: 22px; }
+
+/* ── Finish the Proverb ── */
+.art-halves { display: grid; gap: 6px; width: 40px; }
+.art-halves i { height: 10px; border-radius: 3px; }
+.art-halves i:first-child { width: 30px; background: #dab562; }
+.art-halves i:last-child { width: 30px; justify-self: end; border: 1.5px solid #dab562; }
+.pv-whole { font: 400 var(--step-1)/1.6 var(--font-read); }
+.pv-whole mark { color: inherit; background: var(--gold-soft); border-radius: 3px; padding: 0 2px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+
 @media (min-height: 760px) {
   .choice { min-height: 88px; }
   .choice.choice-event { min-height: 60px; }

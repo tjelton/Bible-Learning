@@ -325,11 +325,8 @@
 
   // A passage with the word's evidence highlighted.
   function passageHtml(word, ref, find) {
-    const verses = TEXT[ref] || [];
-    const first = Number(/:(\d+)/.exec(ref)[1]);
-    const re = new RegExp(`(?<![\\p{L}\\p{N}])(${esc(find || word).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})(?![\\p{L}\\p{N}])`, "iu");
-    const body = verses.map((t, i) => `<span><sup>${first + i}</sup>${esc(E.cleanVerse(t)).replace(re, '<mark class="is-key">$1</mark>')}</span>`).join(" ");
-    return `<h3 class="passage-ref">${esc(word)} · ${esc(ref.replace("-", "–"))}</h3><p class="passage">${body}</p>`;
+    const verses = (TEXT[ref] || []).map(E.cleanVerse);
+    return Kit.markedPassageHtml(`${word} · ${ref.replace("-", "–")}`, Number(/:(\d+)/.exec(ref)[1]), verses, find || word);
   }
 
   function sheetHtml() {

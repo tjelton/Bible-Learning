@@ -1,7 +1,7 @@
 {
   "name": "Bible Learning",
   "short_name": "Bible Learning",
-  "description": "Quick-fire games for learning the Bible, starting with the Gospels.",
+  "description": "Quick-fire games for learning the Bible.",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#edf1ea",
