@@ -59,6 +59,11 @@
   const GLASSES = line("M3 14a3.5 3.5 0 1 0 7 0 3.5 3.5 0 1 0-7 0M14 14a3.5 3.5 0 1 0 7 0 3.5 3.5 0 1 0-7 0M10 14c.7-.8 3.3-.8 4 0");
   const KEBAB = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5.5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="18.5" r="1.9"/></svg>';
   const HOME = line("M4 11l8-7 8 7M6 9.5V20h12V9.5");
+  const PAGE_MENU = line("M5 7h14M5 12h14M5 17h9");
+  const RELOAD = line("M18.5 12a6.5 6.5 0 1 1-2-4.7M18.5 4.5v3.5H15");
+  const TABS = line("M8 8V5.5A1.5 1.5 0 0 1 9.5 4h9A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5H16M5.5 8h9A1.5 1.5 0 0 1 16 9.5v9a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 4 18.5v-9A1.5 1.5 0 0 1 5.5 8z");
+  const RIBBON = line("M7 4h10v16l-5-4-5 4z");
+  const ZOOM = line("M10.5 17a6.5 6.5 0 1 1 0-13 6.5 6.5 0 0 1 0 13zM15.5 15.5L20 20M10.5 8v5M8 10.5h5");
   const BACK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>';
   const host = esc(location.host || "tjelton.github.io");
 
@@ -86,28 +91,28 @@
   }
 
   // ── Drawings of each screen (the phone's light appearance, in both themes) ──
+  // Safari's bottom bar: back, the address bar (page menu ≡ at its left end), tabs.
+  const safariBottom = (ringMenu) => `
+      <div class="ios-bar">
+        <span class="ios-round">${BACK}</span>
+        <span class="ios-address"><span class="ios-pm${ringMenu ? " ring" : ""}">${PAGE_MENU}</span><span class="ios-host">${host}</span>${RELOAD}</span>
+        <span class="ios-round">${TABS}</span>
+      </div>`;
   const safariBar = `
     <div class="ios-screen ios-bottom">
       <div class="ios-page"><span class="ios-line w70"></span><span class="ios-line w90"></span><span class="ios-line w50"></span></div>
-      <div class="ios-bar">
-        <span class="ios-round">${BACK}</span>
-        <span class="ios-address">${host}</span>
-        <span class="ios-round ring">${DOTS}</span>
-      </div>
+      ${safariBottom(true)}
     </div>`;
   const moreMenu = `
     <div class="ios-screen ios-bottom">
       <div class="ios-menu">
-        <span class="ios-row ring">Share ${SHARE}</span>
-        <span class="ios-row">Add to Favorites ${STAR}</span>
-        <span class="ios-row">Add Bookmark ${BOOK}</span>
-        <span class="ios-row">Find on Page ${FIND}</span>
+        <span class="ios-row ring">${SHARE} Share</span>
+        <span class="ios-row">${RIBBON} Add to Bookmarks</span>
+        <span class="ios-row">${BOOK} Add Bookmark to…</span>
+        <span class="ios-row">${FIND} Find on Page</span>
+        <span class="ios-row">${ZOOM} Page Zoom</span>
       </div>
-      <div class="ios-bar">
-        <span class="ios-round">${BACK}</span>
-        <span class="ios-address">${host}</span>
-        <span class="ios-round">${DOTS}</span>
-      </div>
+      ${safariBottom(false)}
     </div>`;
   const shareSheet = `
     <div class="ios-screen ios-sheet">
@@ -170,9 +175,9 @@
     </div>`;
 
   const IOS_STEPS = [
-    { title: "Tap ••• in Safari", art: safariBar,
-      text: `Open this page in Safari, then tap the ••• button next to the address bar. On older iPhones, tap the Share button <span class="inline-ic">${SHARE}</span> in the toolbar instead, and skip to step 3.` },
-    { title: "Tap Share", art: moreMenu, text: "It’s at the top of the menu." },
+    { title: "Tap ≡ in the address bar", art: safariBar,
+      text: `Open this page in Safari. In the address bar at the bottom of the screen, tap the ≡ button at its left end. On older iPhones, tap the Share button <span class="inline-ic">${SHARE}</span> in the toolbar instead, and skip to step 3.` },
+    { title: "Tap Share", art: moreMenu, text: "It’s at the top of the menu that opens." },
     { title: "Tap Add to Home Screen", art: shareSheet,
       text: "Scroll down the list to find it. If it isn’t there, tap <b>View More</b> or <b>Edit Actions</b> at the bottom." },
     { title: "Tap Add", art: addDialog, text: "Leave <b>Open as Web App</b> switched on so it opens full screen." },
