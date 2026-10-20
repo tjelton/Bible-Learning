@@ -64,6 +64,8 @@
   const TABS = line("M8 8V5.5A1.5 1.5 0 0 1 9.5 4h9A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5H16M5.5 8h9A1.5 1.5 0 0 1 16 9.5v9a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 4 18.5v-9A1.5 1.5 0 0 1 5.5 8z");
   const RIBBON = line("M7 4h10v16l-5-4-5 4z");
   const ZOOM = line("M10.5 17a6.5 6.5 0 1 1 0-13 6.5 6.5 0 0 1 0 13zM15.5 15.5L20 20M10.5 8v5M8 10.5h5");
+  const CHEVRON_DOWN = line("M6 9.5l6 6 6-6");
+  const CHEVRON_UP = line("M6 14.5l6-6 6 6");
   const BACK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>';
   const host = esc(location.host || "tjelton.github.io");
 
@@ -114,14 +116,31 @@
       </div>
       ${safariBottom(false)}
     </div>`;
+  // Safari's share sheet: the page, a row of round actions, then (after
+  // View More) a list that includes Add to Home Screen.
+  const shareHead = `
+      <div class="ios-share-head">${appIcon("ios-mini")}<span><b>Bible Learning</b><br>${host}<br><span class="ios-pill">Options ›</span></span></div>
+      <div class="ios-apps">${'<span class="ios-app-dot"></span>'.repeat(4)}</div>`;
+  const actionRow = (last, ring) => `
+      <div class="ios-actions">
+        <span class="ios-action"><span class="ios-circle">${COPY}</span>Copy</span>
+        <span class="ios-action"><span class="ios-circle">${RIBBON}</span>Add to Bookmarks</span>
+        <span class="ios-action"><span class="ios-circle">${GLASSES}</span>Add to Reading List</span>
+        <span class="ios-action"><span class="ios-circle${ring ? " ring" : ""}">${last === "more" ? CHEVRON_DOWN : CHEVRON_UP}</span>${last === "more" ? "View More" : "View Less"}</span>
+      </div>`;
   const shareSheet = `
-    <div class="ios-screen ios-sheet">
-      <div class="ios-sheet-head">${appIcon("ios-mini")}<span><b>Bible Learning</b><br>${host}</span></div>
+    <div class="ios-screen ios-sheet ios-share">
+      ${shareHead}
+      ${actionRow("more", true)}
+    </div>`;
+  const shareMore = `
+    <div class="ios-screen ios-sheet ios-share">
+      ${actionRow("less", false)}
       <div class="ios-list">
-        <span class="ios-row">Copy ${COPY}</span>
-        <span class="ios-row">Add to Reading List ${GLASSES}</span>
-        <span class="ios-row">Add Bookmark ${BOOK}</span>
-        <span class="ios-row ring">Add to Home Screen ${PLUS_BOX}</span>
+        <span class="ios-row ios-left">${BOOK} Add Bookmark to…</span>
+        <span class="ios-row ios-left">${STAR} Add to Favourites</span>
+        <span class="ios-row ios-left">${FIND} Find on Page</span>
+        <span class="ios-row ios-left ring">${PLUS_BOX} Add to Home Screen</span>
       </div>
     </div>`;
   const addDialog = `
@@ -178,8 +197,10 @@
     { title: "Tap ≡ in the address bar", art: safariBar,
       text: `Open this page in Safari. In the address bar at the bottom of the screen, tap the ≡ button at its left end. On older iPhones, tap the Share button <span class="inline-ic">${SHARE}</span> in the toolbar instead, and skip to step 3.` },
     { title: "Tap Share", art: moreMenu, text: "It’s at the top of the menu that opens." },
-    { title: "Tap Add to Home Screen", art: shareSheet,
-      text: "Scroll down the list to find it. If it isn’t there, tap <b>View More</b> or <b>Edit Actions</b> at the bottom." },
+    { title: "Tap View More", art: shareSheet,
+      text: "It’s the ⌄ button at the end of the row of round buttons, below your contacts and apps." },
+    { title: "Tap Add to Home Screen", art: shareMore,
+      text: "It’s in the list that opens. If you don’t see it, scroll down." },
     { title: "Tap Add", art: addDialog, text: "Leave <b>Open as Web App</b> switched on so it opens full screen." },
     { title: "Open it from your Home Screen", art: homeScreen,
       text: "Bible Learning is now on your Home Screen with your other apps. Open it from there each time." },
