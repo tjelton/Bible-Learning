@@ -46,12 +46,6 @@
     const done = evs.filter((e) => E.isMastered(stats[e.id])).length;
     return { done, total: evs.length, p: evs.length ? done / evs.length : 0 };
   }
-  // Chapters in a section the book's outline highlights (Matthew's teaching
-  // blocks, Luke's journey to Jerusalem, John's farewell discourse).
-  function isMarkedChapter(book, ch) {
-    const s = E.sectionFor(gospel(book), ch);
-    return !!(s && s.mark);
-  }
   function saveSettings() { store.set("cv.settings", settings); }
   const shortRef = (k) => { const i = k.lastIndexOf(" "); return `${BOOK_ABBR[k.slice(0, i)]} ${k.slice(i + 1)}`; };
   function saveTraining() { store.set("cv.training", training); }
@@ -271,7 +265,7 @@
     let out = "";
     for (let c = from; c <= to; c++) {
       const pr = chapterProgress(book, c);
-      const cls = ["tile", pr.p >= 1 ? "is-done" : "", isMarkedChapter(book, c) ? "is-marked" : ""].join(" ");
+      const cls = pr.p >= 1 ? "tile is-done" : "tile";
       out += `<button type="button" class="${cls}" style="--p:${pr.p.toFixed(3)}" data-action="chapter" data-book="${book}" data-ch="${c}" aria-label="${book} ${c}: ${pr.done} of ${pr.total} mastered"><span class="fill"></span><span class="n">${c}</span></button>`;
     }
     return out;
@@ -322,7 +316,9 @@
       </header>
 
       ${Kit.saveWarning()}
-      <section class="play-buttons" aria-label="Play">
+      <div class="play-buttons mode-groups">
+      <section class="mode-group" aria-labelledby="quick-title">
+        <h2 class="eyebrow" id="quick-title">Quick play</h2>
         <button type="button" class="btn btn-primary mode-btn" data-action="start" data-mode="round">
           <span class="mode-text"><span class="mode-name">Play a round</span><span class="mode-desc">10 questions · bonus points for speed and streaks</span></span>${ICON.arrow}
         </button>
@@ -330,14 +326,18 @@
           <span class="mode-text"><span class="mode-name">Three lamps</span><span class="mode-desc">Keep going until your three lamps go out</span></span>
           <span class="lamps" aria-hidden="true">${ICON.lamp.replace("<svg", '<svg class="lamp"').repeat(3)}</span>
         </button>
+        ${bestBits.length ? `<p class="bests">${bestBits.join("")}</p>` : ""}
+      </section>
+      <section class="mode-group is-learn" aria-labelledby="learn-title">
+        <h2 class="eyebrow" id="learn-title">Learning</h2>
         <button type="button" class="btn mode-btn" data-action="setup">
           <span class="mode-text"><span class="mode-name">Training</span><span class="mode-desc">${esc(trainingDesc())}</span></span>${ICON.sprout}
         </button>
         <button type="button" class="btn btn-ghost mode-btn" data-action="study">
           <span class="mode-text"><span class="mode-name">Study the chapters</span><span class="mode-desc">Browse every event and read the passages</span></span>${ICON.book}
         </button>
-        ${bestBits.length ? `<p class="bests">${bestBits.join("")}</p>` : ""}
       </section>
+      </div>
 
       <section aria-labelledby="map-title" style="display:grid;gap:10px">
         <div class="section-head">
@@ -348,7 +348,6 @@
         <div class="map">${mapTiles(book, 1, g.chapters)}</div>
         <div class="map-legend">
           <span><i class="swatch"></i>Fills as you master events (right twice in a row)</span>
-          ${g.markLegend ? `<span><i class="dot"></i>${esc(g.markLegend)}</span>` : ""}
         </div>
       </section>
 

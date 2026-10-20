@@ -66,7 +66,7 @@ for (const g of Object.values(GOSPELS)) {
   }
   if (prev !== g.chapters) errors.push(`${g.book}: sections stop at chapter ${prev}`);
   if (!g.intro) errors.push(`${g.book}: missing intro`);
-  if (g.sections.some((s) => s.mark) && !(g.markNote && g.markLegend && g.markTag)) errors.push(`${g.book}: marked sections need markNote, markLegend and markTag`);
+  if (g.sections.some((s) => s.mark) && !(g.markNote && g.markTag)) errors.push(`${g.book}: marked sections need markNote and markTag`);
   console.error(`${g.book}: ${g.events.length} events across ${covered.size}/${g.chapters} chapters`);
 }
 

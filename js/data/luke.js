@@ -5,7 +5,6 @@ window.GOSPELS.Luke = {
   chapters: 24,
   intro: "Luke writes “an orderly account” for a man named Theophilus, starting with two births and ending with the ascension. The middle of the book (9:51 to 19:27) is one long journey to Jerusalem, and most of the parables found only in Luke are told along the way: the Good Samaritan, the Prodigal Son, the Rich Man and Lazarus.",
   markNote: "on Jesus’ long journey to Jerusalem",
-  markLegend: "Luke’s journey to Jerusalem (9:51–19:27)",
   markTag: "Journey to Jerusalem",
   sections: [
     { from: 1, to: 2, name: "The births of John and Jesus" },

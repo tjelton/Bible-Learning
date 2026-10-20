@@ -5,7 +5,6 @@ window.GOSPELS.John = {
   chapters: 21,
   intro: "John is built around signs (miracles that point to who Jesus is) and “I am” sayings. Chapters 1–12 are often called the Book of Signs, and chapters 13–21 the Book of Glory. Five whole chapters (13–17) happen on the night before Jesus dies. John says he wrote so that you may believe that Jesus is the Christ (20:31).",
   markNote: "part of Jesus’ farewell to his disciples at the Last Supper",
-  markLegend: "The Last Supper and Jesus’ farewell words (13–17)",
   markTag: "Farewell",
   sections: [
     { from: 1, to: 1, name: "The Word and the first disciples" },

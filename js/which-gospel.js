@@ -177,7 +177,9 @@
       </header>
 
       ${Kit.saveWarning()}
-      <section class="play-buttons" aria-label="Play">
+      <div class="play-buttons mode-groups">
+      <section class="mode-group" aria-labelledby="quick-title">
+        <h2 class="eyebrow" id="quick-title">Quick play</h2>
         <button type="button" class="btn btn-primary mode-btn" data-action="start" data-mode="round">
           <span class="mode-text"><span class="mode-name">Play a round</span><span class="mode-desc">10 questions · bonus points for speed and streaks</span></span>${ICON.arrow}
         </button>
@@ -185,11 +187,15 @@
           <span class="mode-text"><span class="mode-name">Three lamps</span><span class="mode-desc">Keep going until your three lamps go out</span></span>
           <span class="lamps" aria-hidden="true">${ICON.lamp.replace("<svg", '<svg class="lamp"').repeat(3)}</span>
         </button>
+        ${bestBits.length ? `<p class="bests">${bestBits.join("")}</p>` : ""}
+      </section>
+      <section class="mode-group is-learn" aria-labelledby="learn-title">
+        <h2 class="eyebrow" id="learn-title">Learning</h2>
         <button type="button" class="btn btn-ghost mode-btn" data-action="browse">
           <span class="mode-text"><span class="mode-name">Browse the answers</span><span class="mode-desc">What all four share, and what only one tells</span></span>${ICON.book}
         </button>
-        ${bestBits.length ? `<p class="bests">${bestBits.join("")}</p>` : ""}
       </section>
+      </div>
 
       <section aria-labelledby="progress-title" style="display:grid;gap:10px">
         <div class="section-head">

@@ -17,7 +17,6 @@ window.GOSPELS.Matthew = {
   chapters: 28,
   intro: "Matthew is built around five long blocks of Jesus\u2019 teaching, each ending with words like \u201Cwhen Jesus had finished these sayings.\u201D Learn those five (chapters 5\u20137, 10, 13, 18 and 24\u201325) and the stories fall into place between them.",
   markNote: "one of Matthew\u2019s five teaching blocks",
-  markLegend: "One of Matthew\u2019s five teaching blocks",
   markTag: "Teaching block",
   // The five teaching blocks (5–7, 10, 13, 18, 24–25) each end with
   // "when Jesus had finished…".
