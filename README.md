@@ -147,6 +147,12 @@ To play on an iPhone, host the folder anywhere that serves static files (GitHub 
 Netlify, Cloudflare Pages…), open it in Safari, then tap **Share → Add to Home Screen**.
 It then opens full screen like an app.
 
+On an iPhone or iPad in a browser tab, the first screen shows a banner offering to show
+how. **Show me how** opens the steps, each with a drawing of the Safari screen and the
+button to tap. The banner's **✕** hides it until the next visit; **Don't show again**
+hides it for good. The steps stay available from a link at the foot of the first screen,
+which is hidden once it's running from the Home Screen.
+
 `node scripts/build.mjs` bundles everything into one file, `dist/bible-learning.html`,
 for hosts that take a single page.
 
@@ -259,6 +265,7 @@ index.html                  page shell
 css/styles.css              all styling (light and dark)
 js/hub.js                   choosing a part of the Bible, its games page, routing
 js/kit.js                   shared pieces: saved data, sound, passage sheet, icons
+js/install.js               the "Add to Home Screen" banner and steps for iPhone and iPad
 js/engine.js                Chapter & Verse rules: choices, weighting, scoring, training (no DOM)
 js/chapter-and-verse.js     Chapter & Verse screens and input
 js/which-gospel-engine.js   Which Gospel? rules: answers, grading, hints (no DOM)

@@ -8,6 +8,7 @@
   "use strict";
 
   const { esc, ICON } = window.Kit;
+  const Install = window.Install;
   const GAMES = window.Games || {};
   const NAME = "Bible Learning";
 
@@ -26,6 +27,7 @@
 
   const app = document.getElementById("app");
   let active = null; // the open game, if any
+  let installSheet = false; // the "Add to Home Screen" steps are open
 
   function parse() {
     const [partId, gameId] = location.hash.replace(/^#\/?/, "").split("/");
@@ -50,8 +52,10 @@
         <p class="eyebrow">${NAME}</p>
         <h1 class="ask" tabindex="-1">What would you like to study?</h1>
       </header>
+      ${Install.bannerHtml()}
       <section class="parts" aria-label="Parts of the Bible">${cards}</section>
-      <p class="footer-note">Progress is saved in this browser on this device only. On iPhone, tap Share → Add to Home Screen to use it like an app (the Home Screen app keeps its own progress, separate from Safari’s).</p>`;
+      <p class="footer-note">Progress is saved in this browser on this device only.</p>
+      ${Install.footerLinkHtml()}`;
   }
 
   function partHtml(part) {
@@ -89,18 +93,34 @@
     if (!r.part && location.hash.replace(/^#\/?/, "")) history.replaceState(null, "", "#/");
     document.title = r.part ? `${r.part.name} · ${NAME}` : NAME;
     app.className = "app";
-    app.innerHTML = r.part ? partHtml(r.part) : pickerHtml();
+    if (r.part) installSheet = false;
+    renderShell();
     window.scrollTo(0, 0);
     if (focus) app.querySelector("h1")?.focus({ preventScroll: true });
+  }
+
+  // The first screen or a part's games page, with the install steps over it when open.
+  function renderShell() {
+    const r = parse();
+    app.innerHTML = (r.part ? partHtml(r.part) : pickerHtml()) + (installSheet ? Install.sheetHtml() : "");
+    document.body.style.overflow = installSheet ? "hidden" : "";
   }
 
   window.addEventListener("hashchange", () => show(true));
   app.addEventListener("click", (ev) => {
     const el = ev.target.closest("[data-action]");
-    if (!el || el.disabled || !active) return;
-    GAMES[active].click(el, ev);
+    if (!el || el.disabled) return;
+    if (active) return GAMES[active].click(el, ev);
+    const next = Install.action(el.dataset.action);
+    if (!next) return;
+    installSheet = next === "open" ? true : next === "close" ? false : installSheet;
+    renderShell();
+    if (next === "open") app.querySelector(".sheet .icon-btn")?.focus();
   });
-  document.addEventListener("keydown", (ev) => { if (active) GAMES[active].key(ev); });
+  document.addEventListener("keydown", (ev) => {
+    if (active) return GAMES[active].key(ev);
+    if (installSheet && ev.key === "Escape") { installSheet = false; renderShell(); }
+  });
 
   // ── Start (keeps the route and any game in progress when the page is updated live) ──
   function boot(data) {
