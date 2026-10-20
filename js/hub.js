@@ -106,12 +106,13 @@
     document.body.style.overflow = installSheet ? "hidden" : "";
   }
 
+  Install.onChange(() => { if (!active) renderShell(); });
   window.addEventListener("hashchange", () => show(true));
   app.addEventListener("click", (ev) => {
     const el = ev.target.closest("[data-action]");
     if (!el || el.disabled) return;
     if (active) return GAMES[active].click(el, ev);
-    const next = Install.action(el.dataset.action);
+    const next = Install.action(el);
     if (!next) return;
     installSheet = next === "open" ? true : next === "close" ? false : installSheet;
     renderShell();

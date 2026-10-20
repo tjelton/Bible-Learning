@@ -849,3 +849,40 @@ h2.sec-name { font: 600 var(--step-1)/1.3 var(--font-ui); }
 .ios-screen .ios-row.ring { box-shadow: inset 0 0 0 3px #e0a100; border-radius: 10px; }
 .ios-screen .ios-link.ring { box-shadow: inset 0 0 0 2px #e0a100; }
 .ios-screen .ios-app-icon.ring { box-shadow: 0 0 0 3px #fff, 0 0 0 6px #e0a100; }
+/* Android (Chrome) */
+.and-screen { --and-blue: #0b57d0; background: #fff; font-family: Roboto, "Instrument Sans", system-ui, sans-serif; }
+.and-top { min-height: 210px; align-content: start; }
+.and-bar { display: grid; grid-template-columns: 32px minmax(0, 1fr) 32px 32px; gap: 4px; align-items: center; }
+.and-ic { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; }
+.and-address {
+  height: 38px; border-radius: 19px; background: #eef1f6;
+  display: flex; align-items: center; padding: 0 14px;
+  font-size: 13px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+.and-tabs {
+  justify-self: center; width: 20px; height: 20px; border: 2px solid currentColor; border-radius: 5px;
+  display: grid; place-items: center; font-size: 11px; font-weight: 700;
+}
+.and-menu {
+  justify-self: end; width: 84%; margin-top: -6px; white-space: nowrap;
+  border-radius: 14px; background: #f3f5f9; box-shadow: 0 6px 20px rgb(0 0 0 / 0.18);
+  display: grid; padding: 6px 0;
+}
+.and-row { display: flex; align-items: center; gap: 10px; padding: 10px 16px; min-height: 40px; }
+.and-dim { min-height: 210px; place-content: center; background: #7d7f84; }
+.and-dialog {
+  width: 240px; border-radius: 26px; background: #f3f5f9;
+  padding: 20px 20px 14px; display: grid; gap: 14px;
+}
+.and-title { font-size: 18px; font-weight: 500; }
+.and-app { display: flex; align-items: center; gap: 12px; }
+.and-app small { color: #5f6368; }
+.and-buttons { display: flex; justify-content: flex-end; gap: 4px; }
+.and-btn { color: var(--and-blue); font-weight: 600; padding: 8px 12px; border-radius: 18px; }
+.ios-screen .and-row.ring { box-shadow: inset 0 0 0 3px #e0a100; border-radius: 10px; margin: 0 4px; }
+.ios-screen .and-btn.ring { box-shadow: inset 0 0 0 2px #e0a100; }
+.install-tabs { margin-bottom: 22px; }
+.install-quick { display: grid; gap: 10px; margin-bottom: 26px; }
+.install-quick p { font-size: var(--step-0); color: var(--muted); }
+.install-quick .install-or { margin-top: 8px; }
+.install-note + .install-note { margin-top: 12px; }

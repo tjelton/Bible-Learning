@@ -1,8 +1,10 @@
-// "Add to Home Screen" help for iPhone and iPad: a banner on the first screen
-// and a step-by-step sheet with drawings of each Safari screen. The banner
-// shows only in a browser tab on iOS (not once installed, nor inside another
-// page). ✕ hides it until the next visit; "Don't show again" hides it for good.
-// The sheet stays reachable from a link at the foot of the first screen.
+// "Add to Home Screen" help for phones: a banner on the first screen and a
+// step-by-step sheet, with drawings of each screen, for iPhone/iPad (Safari)
+// and Android (Chrome). Where Chrome offers its own install prompt, the
+// banner's button opens that instead. The banner shows only in a browser tab
+// on iOS or Android (not once installed, nor inside another page). ✕ hides it
+// until the next visit; "Don't show again" hides it for good. The sheet stays
+// reachable from a link at the foot of the first screen.
 (function () {
   "use strict";
 
@@ -12,6 +14,7 @@
 
   const ua = navigator.userAgent || "";
   const isIOS = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  const isAndroid = /Android/.test(ua);
   const installed = navigator.standalone === true ||
     !!(window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
   let framed = false;
@@ -21,8 +24,27 @@
   function hideForNow() { try { sessionStorage.setItem(SESSION, "1"); } catch (_) { /* hidden until re-render only */ } hiddenNow = true; }
   let hiddenNow = false;
 
-  const showBanner = () => isIOS && !installed && !framed && !hiddenNow && !laterThisVisit() && !store.get(FOREVER, false);
+  const showBanner = () => (isIOS || isAndroid) && !installed && !framed && !hiddenNow && !laterThisVisit() && !store.get(FOREVER, false);
   const offerHelp = () => !installed && !framed;
+  let tab = isAndroid ? "android" : "ios"; // which phone the sheet shows
+
+  // Chrome's own install prompt, when it offers one. It's held back (no
+  // mini-infobar) while our banner is showing, and used by its Install button.
+  let prompt = null;
+  let changed = () => {}; // set by the shell to redraw
+  window.addEventListener("beforeinstallprompt", (ev) => {
+    if (showBanner()) ev.preventDefault();
+    prompt = ev;
+    changed();
+  });
+  window.addEventListener("appinstalled", () => { prompt = null; hiddenNow = true; changed(); });
+  function installNow() {
+    if (!prompt) return;
+    const p = prompt;
+    prompt = null;
+    p.prompt();
+    p.userChoice.then((c) => { if (c && c.outcome === "accepted") hiddenNow = true; changed(); }).catch(() => {});
+  }
 
   // The app's icon, drawn inline so it also works in the single-file build.
   const appIcon = (cls) => `<svg class="${cls}" viewBox="0 0 180 180" aria-hidden="true"><rect width="180" height="180" fill="#1f5a44"/><rect x="18" y="18" width="144" height="144" rx="10" fill="none" stroke="#dab562" stroke-width="3" opacity="0.55"/><text x="90" y="128" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-style="italic" font-size="118" fill="#dab562">&amp;</text></svg>`;
@@ -35,6 +57,8 @@
   const FIND = line("M10.5 17a6.5 6.5 0 1 1 0-13 6.5 6.5 0 0 1 0 13zM15.5 15.5L20 20");
   const COPY = line("M9 9h10v11H9zM5 15V4h10");
   const GLASSES = line("M3 14a3.5 3.5 0 1 0 7 0 3.5 3.5 0 1 0-7 0M14 14a3.5 3.5 0 1 0 7 0 3.5 3.5 0 1 0-7 0M10 14c.7-.8 3.3-.8 4 0");
+  const KEBAB = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5.5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="18.5" r="1.9"/></svg>';
+  const HOME = line("M4 11l8-7 8 7M6 9.5V20h12V9.5");
   const BACK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>';
   const host = esc(location.host || "tjelton.github.io");
 
@@ -47,7 +71,9 @@
           <p class="install-title">Put Bible Learning on your Home Screen</p>
           <p class="install-sub">It opens full screen, like an app.</p>
           <div class="install-actions">
-            <button type="button" class="btn btn-small btn-primary" data-action="install-help">Show me how</button>
+            ${prompt
+              ? `<button type="button" class="btn btn-small btn-primary" data-action="install-now">Install</button>`
+              : `<button type="button" class="btn btn-small btn-primary" data-action="install-help">Show me how</button>`}
             <button type="button" class="btn btn-small btn-ghost" data-action="install-never">Don’t show again</button>
           </div>
         </div>
@@ -56,10 +82,10 @@
   }
 
   function footerLinkHtml() {
-    return offerHelp() ? `<button type="button" class="link-btn" data-action="install-help">${SHARE} How to add it to your iPhone Home Screen</button>` : "";
+    return offerHelp() ? `<button type="button" class="link-btn" data-action="install-help">${PLUS_BOX} How to put it on your phone’s Home Screen</button>` : "";
   }
 
-  // ── Drawings of each screen (iOS light appearance, in both themes) ──
+  // ── Drawings of each screen (the phone's light appearance, in both themes) ──
   const safariBar = `
     <div class="ios-screen ios-bottom">
       <div class="ios-page"><span class="ios-line w70"></span><span class="ios-line w90"></span><span class="ios-line w50"></span></div>
@@ -107,7 +133,43 @@
       <span class="ios-app">${appIcon("ios-app-icon ring")}<span class="ios-app-name">Bible Learning</span></span>
     </div>`;
 
-  const STEPS = [
+  // Android, Chrome
+  const chromeBar = `
+    <div class="ios-screen and-screen and-top">
+      <div class="and-bar">
+        <span class="and-ic">${HOME}</span>
+        <span class="and-address">${host}</span>
+        <span class="and-tabs">1</span>
+        <span class="and-ic ring">${KEBAB}</span>
+      </div>
+      <div class="ios-page"><span class="ios-line w70"></span><span class="ios-line w90"></span><span class="ios-line w50"></span></div>
+    </div>`;
+  const chromeMenu = `
+    <div class="ios-screen and-screen and-top">
+      <div class="and-bar">
+        <span class="and-ic">${HOME}</span>
+        <span class="and-address">${host}</span>
+        <span class="and-tabs">1</span>
+        <span class="and-ic">${KEBAB}</span>
+      </div>
+      <div class="and-menu">
+        <span class="and-row">New tab</span>
+        <span class="and-row">History</span>
+        <span class="and-row">Bookmarks</span>
+        <span class="and-row">Share…</span>
+        <span class="and-row ring">${PLUS_BOX} Add to Home screen</span>
+      </div>
+    </div>`;
+  const chromeDialog = `
+    <div class="ios-screen and-screen and-dim">
+      <div class="and-dialog">
+        <b class="and-title">Install app</b>
+        <span class="and-app">${appIcon("ios-mini")}<span>Bible Learning<br><small>${host}</small></span></span>
+        <span class="and-buttons"><span class="and-btn">Cancel</span><span class="and-btn ring">Install</span></span>
+      </div>
+    </div>`;
+
+  const IOS_STEPS = [
     { title: "Tap ••• in Safari", art: safariBar,
       text: `Open this page in Safari, then tap the ••• button next to the address bar. On older iPhones, tap the Share button <span class="inline-ic">${SHARE}</span> in the toolbar instead, and skip to step 3.` },
     { title: "Tap Share", art: moreMenu, text: "It’s at the top of the menu." },
@@ -117,30 +179,53 @@
     { title: "Open it from your Home Screen", art: homeScreen,
       text: "Bible Learning is now on your Home Screen with your other apps. Open it from there each time." },
   ];
+  const ANDROID_STEPS = [
+    { title: "Tap ⋮ in Chrome", art: chromeBar,
+      text: "Open this page in Chrome, then tap the ⋮ button at the top right, next to the address bar." },
+    { title: "Tap Add to Home screen", art: chromeMenu,
+      text: "Scroll down the menu to find it. On some phones it’s called <b>Install app</b>." },
+    { title: "Tap Install", art: chromeDialog,
+      text: "If Chrome asks, choose <b>Install</b> rather than <b>Create shortcut</b>, so it opens full screen." },
+    { title: "Open it from your Home Screen", art: homeScreen,
+      text: "Bible Learning is now on your Home Screen and in your apps list. Open it from there each time." },
+  ];
 
   function sheetHtml() {
-    const steps = STEPS.map((s, i) => `
+    const android = tab === "android";
+    const steps = (android ? ANDROID_STEPS : IOS_STEPS).map((st, i) => `
       <li class="install-step">
         <div class="install-step-text">
-          <h3><span class="step-n">${i + 1}</span>${esc(s.title)}</h3>
-          <p>${s.text}</p>
+          <h3><span class="step-n">${i + 1}</span>${esc(st.title)}</h3>
+          <p>${st.text}</p>
         </div>
-        <div class="ios-art" aria-hidden="true">${s.art}</div>
+        <div class="ios-art" aria-hidden="true">${st.art}</div>
       </li>`).join("");
-    const banner = isIOS && !store.get(FOREVER, false);
+    const quick = android && prompt
+      ? `<div class="install-quick"><p>Chrome can do it for you in one tap.</p><button type="button" class="btn btn-primary" data-action="install-now">Install Bible Learning</button><p class="install-or">Or do it yourself:</p></div>`
+      : "";
+    const note = android
+      ? `<p class="install-note"><b>Using Samsung Internet?</b> Tap ≡ at the bottom right, then <b>Add page to</b> → <b>Home screen</b>.</p>
+         <p class="install-note"><b>Your progress:</b> the app shares the progress saved in Chrome, so nothing is lost.</p>`
+      : `<p class="install-note"><b>Your progress:</b> the Home Screen app keeps its own progress, separate from Safari’s. Anything you’ve done in Safari stays there, so it’s best to add it before you get far.</p>`;
+    const never = (isIOS || isAndroid) && !store.get(FOREVER, false);
     return `
       <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
         <div class="sheet-head">
-          <div><p class="eyebrow">iPhone and iPad</p><h2 class="ref" id="sheet-title">Add to Home Screen</h2></div>
+          <div><p class="eyebrow">Phones and tablets</p><h2 class="ref" id="sheet-title">Add to Home Screen</h2></div>
           <button type="button" class="icon-btn" data-action="install-close" aria-label="Close">${ICON.close}</button>
         </div>
         <div class="sheet-body">
-          <p class="sheet-intro">Bible Learning can sit on your Home Screen and open full screen, like an app. It takes five taps.</p>
+          <p class="sheet-intro">Bible Learning can sit on your Home Screen and open full screen, like an app. It takes a few taps.</p>
+          <div class="segmented install-tabs" role="group" aria-label="Your phone">
+            <button type="button" data-action="install-tab" data-value="ios" aria-pressed="${!android}">iPhone or iPad</button>
+            <button type="button" data-action="install-tab" data-value="android" aria-pressed="${android}">Android</button>
+          </div>
+          ${quick}
           <ol class="install-steps">${steps}</ol>
-          <p class="install-note"><b>Your progress:</b> the Home Screen app keeps its own progress, separate from Safari’s. Anything you’ve done in Safari stays there, so it’s best to add it before you get far.</p>
+          ${note}
           <div class="install-done">
             <button type="button" class="btn btn-primary" data-action="install-close">Got it</button>
-            ${banner ? `<button type="button" class="btn btn-ghost" data-action="install-never">Don’t show the reminder again</button>` : ""}
+            ${never ? `<button type="button" class="btn btn-ghost" data-action="install-never">Don’t show the reminder again</button>` : ""}
           </div>
         </div>
       </div>`;
@@ -148,15 +233,20 @@
 
   // Handles the banner's and sheet's buttons. Returns what the shell should
   // do: "open" or "close" the sheet, "render" the screen again, or null.
-  function action(name) {
-    switch (name) {
+  function action(el) {
+    switch (el.dataset.action) {
       case "install-help": return "open";
       case "install-close": return "close";
+      case "install-tab": tab = el.dataset.value; return "render";
+      case "install-now": installNow(); return "close";
       case "install-later": hideForNow(); return "render";
       case "install-never": store.set(FOREVER, true); hiddenNow = true; return "close";
       default: return null;
     }
   }
 
-  window.Install = { bannerHtml, footerLinkHtml, sheetHtml, action };
+  // The shell's redraw, for when Chrome offers or finishes an install.
+  function onChange(fn) { changed = fn; }
+
+  window.Install = { bannerHtml, footerLinkHtml, sheetHtml, action, onChange };
 })();
