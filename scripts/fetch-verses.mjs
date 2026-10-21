@@ -15,8 +15,12 @@ const root = new URL("../", import.meta.url);
 // verses go (file and global).
 const GAMES = [
   {
-    name: "Clusters", data: "clusters.js", global: "CLUSTERS", out: "clusters-text.js", outGlobal: "CLUSTERS_TEXT",
-    refs: (groups) => [...groups.flatMap((g) => g.items.map((it) => it[1])), ...require("../js/clusters-engine.js").RANKS.map((r) => r.ref)],
+    name: "Clusters and Odd One Out", data: "clusters.js", global: "CLUSTERS", out: "clusters-text.js", outGlobal: "CLUSTERS_TEXT",
+    refs: (groups) => [
+      ...groups.flatMap((g) => g.items.map((it) => it[1])),
+      ...require("../js/clusters-engine.js").RANKS.map((r) => r.ref),
+      ...require("../js/odd-one-out-engine.js").RANKS.map((r) => r.ref),
+    ],
   },
   {
     name: "Number Crunch", data: "number-crunch.js", global: "NUMBER_CRUNCH", out: "number-crunch-text.js", outGlobal: "NUMBER_CRUNCH_TEXT",

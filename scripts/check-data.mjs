@@ -123,6 +123,7 @@ vm.runInContext(readFileSync(new URL("clusters.js", root), "utf8"), ctx, { filen
 vm.runInContext(readFileSync(new URL("clusters-text.js", root), "utf8"), ctx, { filename: "clusters-text.js" });
 const { CLUSTERS, CLUSTERS_TEXT } = ctx.window;
 const CL = require("../js/clusters-engine.js");
+const OO = require("../js/odd-one-out-engine.js");
 const clGroups = CL.prepare(CLUSTERS);
 for (const g of CLUSTERS) {
   const where = `clusters ${g.id}`;
@@ -130,6 +131,7 @@ for (const g of CLUSTERS) {
   ids.add(g.id);
   for (const k of ["id", "title", "note"]) if (!g[k]) errors.push(`${where}: missing ${k}`);
   if (!CL.LEVELS.includes(g.level)) errors.push(`${where}: level must be 1–4`);
+  if (!OO.KINDS.includes(g.kind)) errors.push(`${where}: kind must be one of ${OO.KINDS.join(", ")}`);
   if (/['"]/.test(g.title + g.note + g.items.map((it) => it[0]).join("") + (g.fits || []).join(""))) errors.push(`${where}: use curly quotes and apostrophes`);
   if (g.items.length < 4) errors.push(`${where}: needs at least four items`);
   const words = g.items.map((it) => it[0].toLowerCase());
@@ -156,6 +158,16 @@ for (const g of clGroups) {
   if (!ok) errors.push(`clusters ${g.id}: never fits in a puzzle with groups from the other levels`);
 }
 console.error(`Clusters: ${CLUSTERS.length} groups (${CL.LEVELS.map((lv) => CLUSTERS.filter((g) => g.level === lv).length).join(" / ")} by level)`);
+// Odd One Out takes the odd word from a group of the same kind: every group's
+// sets must find one, whichever three of its words come up.
+const ooRng = Engine.seededRng(11);
+const clById = Object.fromEntries(clGroups.map((g) => [g.id, g]));
+for (const g of clGroups) {
+  const sets = Array.from({ length: 40 }, () => OO.question(clGroups, g, ooRng));
+  const off = sets.filter((q) => !q || clById[q.oddId].kind !== g.kind).length;
+  if (off) errors.push(`clusters ${g.id}: ${off} of 40 Odd One Out sets found no odd word of the same kind`);
+}
+console.error(`Odd One Out: ${OO.KINDS.map((k) => `${clGroups.filter((g) => g.kind === k).length} ${k}`).join(", ")}`);
 
 // Words quoted in a note (“…”) must come from the passage shown with it.
 function checkQuotes(where, note, text) {

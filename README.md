@@ -6,9 +6,10 @@ Quick-fire phone games for learning the Bible. You start by choosing which part 
 Bible to study, and each part has its own page of games: the Whole Bible, the Old
 Testament and the Gospels so far; others can be added later.
 
-The Whole Bible has three games:
+The Whole Bible has four games:
 
 - **Clusters**: group sixteen words from across the Bible into four clusters of four.
+- **Odd One Out**: four words, three of which belong together. Tap the one that doesn't.
 - **Number Crunch**: guess a number from the Bible on a slider. The closer, the more you score.
 - **Before or After?**: say whether one moment in the Bible's story came before or after another.
 
@@ -33,10 +34,10 @@ group from each of four levels, shown by colour:
 
 | Level           | Groups | For example                                 |
 | --------------- | ------ | ------------------------------------------- |
-| Straightforward | 16     | Sons of Jacob, Plagues of Egypt             |
-| Steady          | 20     | The seven churches of Revelation, Queens    |
-| Challenging     | 18     | Words left untranslated, Stoned to death    |
-| Tricky          | 18     | ___ of God, Lived more than 900 years       |
+| Straightforward | 22     | Sons of Jacob, Plagues of Egypt, Birds      |
+| Steady          | 27     | The seven churches of Revelation, Priests   |
+| Challenging     | 25     | Words left untranslated, Valleys            |
+| Tricky          | 24     | ___ of God, Picked out by casting lots      |
 
 Most groups have more words than a puzzle needs, so the same group comes back with
 different words. New puzzles favour groups you haven't seen and hold back the 24 you saw
@@ -50,6 +51,30 @@ most recently.
 - The home screen counts puzzles solved, perfect solves and your streak, and saves a
   puzzle in progress so you can come back to it. Starting a new one instead ends the
   streak.
+
+## Odd One Out
+
+Four words, three from one Clusters group and one from another, such as Gideon, Ehud,
+Othniel and Huldah. Tap the one that doesn't belong. The answer names both groups (the
+three are judges of Israel; Huldah was a prophetess) and either group can be opened to
+read its verses.
+
+It uses the same 98 groups as Clusters, so every set has a level and a colour.
+
+- Each group has a kind (people, places, things, words, books or story), and the odd word
+  always comes from another group of the same kind: three people get a fourth person,
+  never a place. Groups that share a word with the three's group are favoured, as their
+  words look as if they belong. Groups in the same family never meet.
+- Every set has one right answer. The odd word never belongs to the three's group, and
+  no other group holds it and two of the three. Sarah, Leah and Isaac (buried at
+  Machpelah) are never shown with Rachel, who would make three wives of the patriarchs.
+- **Play a round**: 10 sets, three straightforward, three steady, two challenging and
+  two tricky, in that order, with the speed and streak bonuses.
+- **Three lamps**: starts with straightforward sets. Every three right in a row opens
+  the next level, which then comes up most; a miss goes back to the start.
+- The **Clue** names what the three share, for half the points.
+- **The groups** lists every group by level with all its words, ticked once learned
+  (its odd one out spotted twice in a row), and opens each one's verses.
 
 ## Number Crunch
 
@@ -206,7 +231,7 @@ python3 -m http.server 8000
 ```
 
 Each screen has its own address, so the back button works and you can link straight to a
-game: `#/` (choose a part), `#/bible`, `#/bible/clusters`, `#/bible/number-crunch`,
+game: `#/` (choose a part), `#/bible`, `#/bible/clusters`, `#/bible/odd-one-out`, `#/bible/number-crunch`,
 `#/bible/before-or-after`, `#/old-testament`, `#/old-testament/proverbs`, `#/gospels`,
 `#/gospels/chapter-and-verse`, `#/gospels/which-gospel`.
 
@@ -244,9 +269,10 @@ for hosts that take a single page.
     out, which proves the answer is complete. That covers 94 of the 152 questions. The
     rest were checked by hand against a Gospel synopsis.
   - Clusters groups: every word's passage contains the word itself (or its
-    `find` phrase), each book group's words are books, and every group can appear in
-    some puzzle. Whether each word really belongs, and whether any word could also
-    fit another group, was checked by hand.
+    `find` phrase), each book group's words are books, every group has a kind, every
+    group can appear in some puzzle, and every group's Odd One Out sets find an odd
+    word of the same kind. Whether each word really belongs, and whether any word could
+    also fit another group, was checked by hand.
   - Number Crunch facts: every passage contains the phrase that states the number, and
     the answer sits on one of the slider's steps.
   - Before or After? events: every passage contains the event's `find` phrase, and
@@ -282,6 +308,15 @@ node --test
 - every word belongs to exactly one of its puzzle's groups, and families never meet
 - unseen groups come first, and recent ones are held back
 - checking guesses (including three of one group), and the ranks quoting the text
+
+`tests/odd-one-out.test.mjs` covers Odd One Out:
+
+- every set is three words from one group and an odd word from another group of the
+  same kind, outside its family
+- every set has exactly one answer: no other three of the four share a group
+- rounds run from straightforward to tricky, and three lamps opens harder levels as
+  the run grows while holding back recent groups
+- the ranks quoting the text
 
 `tests/number-crunch.test.mjs` covers Number Crunch:
 
@@ -333,10 +368,12 @@ node --test
 - optionally a `note`
 - optionally a `group`, shared by questions that would give each other away
 
-**Clusters groups** live in `js/data/clusters.js`. Each has:
+**Clusters groups** live in `js/data/clusters.js`, and Odd One Out uses them too. Each has:
 
 - a stable `id`
 - a `level` from 1 to 4
+- a `kind`: people, places, things, words, books, or story (words from one story).
+  Odd One Out takes the odd word from a group of the same kind
 - a `title` and a `note`
 - `items`: each word with a reference that shows it belongs, and an optional `find`
   phrase when the passage doesn't use the word itself
@@ -390,6 +427,8 @@ js/which-gospel-engine.js   Which Gospel? rules: answers, grading, hints (no DOM
 js/which-gospel.js          Which Gospel? screens and input
 js/clusters-engine.js       Clusters rules: building puzzles, checking guesses (no DOM)
 js/clusters.js              Clusters screens and input
+js/odd-one-out-engine.js    Odd One Out rules: building fair sets of four, picking groups (no DOM)
+js/odd-one-out.js           Odd One Out screens and input
 js/number-crunch-engine.js  Number Crunch rules: slider steps, scoring (no DOM)
 js/number-crunch.js         Number Crunch screens and input
 js/before-or-after-engine.js  Before or After? rules: the timeline, pairing, picking (no DOM)
@@ -399,7 +438,7 @@ js/proverbs.js              Finish the Proverb screens and input
 js/data/<book>.js           each Gospel's events and outline
 js/data/text-<book>.js      the full text of each Gospel and Proverbs (WEB)
 js/data/which-gospel.js     Which Gospel? questions
-js/data/clusters.js         Clusters groups
+js/data/clusters.js         Clusters groups (also used by Odd One Out)
 js/data/number-crunch.js    Number Crunch facts
 js/data/before-or-after.js  Before or After? events, in story order
 js/data/<game>-text.js      the verses each whole-Bible game cites (WEB)
