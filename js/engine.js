@@ -299,7 +299,8 @@
   // review, about REVIEW_SHARE of questions check the most overdue one; the
   // rest come from chapters being learned, weighted towards events you miss.
   // With everything learned and nothing due, the soonest-due chapter comes
-  // up early. Recent events are skipped where possible.
+  // up early. Recent events are skipped where possible. With fewer than
+  // TRAINING_ACTIVE chapters left to learn, learned chapters fill the gap.
   function pickTrainingEvent(gospels, scope, introduced, stats, review, now, rng, avoid) {
     const st = trainingStatus(gospels, scope, introduced, stats);
     const due = dueChapters(gospels, scope, introduced, stats, review, now);
@@ -307,8 +308,19 @@
     if (due.length && (!st.learning.length || rng() < REVIEW_SHARE)) {
       chapters = [due[0]];
       isReview = true;
-    } else if (st.learning.length) {
+    } else if (st.learning.length >= TRAINING_ACTIVE || !st.learned.length) {
       chapters = st.learning;
+    } else if (st.learning.length) {
+      // Near the end of the scope fewer than TRAINING_ACTIVE chapters are left
+      // to learn, so the answer would be easy to guess. Mix in learned chapters
+      // (soonest due first) to keep TRAINING_ACTIVE in play, picking a chapter
+      // evenly so the ones being learned aren't the obvious answer.
+      const extra = st.learned.slice().sort((a, b) => dueAt(review, a) - dueAt(review, b))
+        .slice(0, TRAINING_ACTIVE - st.learning.length);
+      const all = st.learning.concat(extra);
+      const pick = all[Math.min(all.length - 1, Math.floor(rng() * all.length))];
+      chapters = [pick];
+      isReview = !st.learning.includes(pick);
     } else if (st.learned.length) {
       chapters = [st.learned.slice().sort((a, b) => dueAt(review, a) - dueAt(review, b))[0]];
       isReview = true;

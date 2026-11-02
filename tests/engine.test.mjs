@@ -324,6 +324,25 @@ test("training only asks about chapters being learned until one is due for revie
   for (let i = 0; i < 200; i++) assert.ok(!avoid.includes(Engine.pickTrainingEvent(GOSPELS, MT, introduced, stats, notDue, now, rng, avoid).event.id));
 });
 
+test("with only one chapter left to learn, learned chapters are mixed in so the answer isn't obvious", () => {
+  const scope = scopeOf(["Matthew"], { Matthew: [1, 2, 3, 4] });
+  const introduced = ["Matthew 1", "Matthew 2", "Matthew 3", "Matthew 4"];
+  const stats = masterAll({}, ["Matthew 1", "Matthew 2", "Matthew 3"].flatMap(eventsIn));
+  const now = 1e12;
+  const review = { "Matthew 1": { level: 2, due: now + 3 }, "Matthew 2": { level: 2, due: now + 1 }, "Matthew 3": { level: 2, due: now + 2 } };
+  const rng = Engine.seededRng(7);
+  const counts = {};
+  for (let i = 0; i < 900; i++) {
+    const p = Engine.pickTrainingEvent(GOSPELS, scope, introduced, stats, review, now, rng);
+    const k = `${p.event.book} ${p.event.ch}`;
+    counts[k] = (counts[k] || 0) + 1;
+    assert.equal(p.review, k !== "Matthew 4", p.event.id);
+  }
+  // Matthew 4 plus the two soonest-due learned chapters, about a third each.
+  assert.deepEqual(Object.keys(counts).sort(), ["Matthew 2", "Matthew 3", "Matthew 4"]);
+  for (const n of Object.values(counts)) assert.ok(n > 230 && n < 370, JSON.stringify(counts));
+});
+
 test("reviews take the most overdue chapter, and run early once everything is learned", () => {
   const scope = scopeOf(["Matthew"], { Matthew: [1, 2, 3] });
   const introduced = ["Matthew 1", "Matthew 2", "Matthew 3"];

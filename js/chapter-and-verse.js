@@ -539,7 +539,7 @@
       <article class="card${answered ? "" : " is-asking"}" aria-live="polite">
         <div class="card-top">
           <span class="kind">${q.type === "chapter" ? "What happens in this chapter?" : multi ? (q.type === "verse" ? "Which Gospel and chapter is this verse in?" : "Which Gospel and chapter?") : q.type === "verse" ? "Which chapter is this verse in?" : "Which chapter is this in?"}</span>
-          ${q.review ? `<span class="review-tag">Review</span>` : ""}
+          ${q.review && answered ? `<span class="review-tag">Review</span>` : ""}
         </div>
         ${clue}
         ${answered ? revealHtml(e, ok, q) : ""}
